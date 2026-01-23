@@ -1657,6 +1657,11 @@ class Truck {
                 // Apply high damping temporarily for smooth transition
                 body.setLinearDamping(15.0);
                 body.setAngularDamping(20.0);
+                // Re-enable collisions now that item is settled
+                if (body.setCollisionFilterMembership) {
+                    body.setCollisionFilterMembership(1);  // Items group
+                    body.setCollisionFilterCollideMask(1 | 2);  // Collide with items and truck
+                }
                 body.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
                 item.becomesDynamicAt = 0; // Only do this once
                 // Reset damping after a delay
@@ -1927,10 +1932,16 @@ class Truck {
         for (let i = 0; i < this.loadedItems.length; i++) {
             const item = this.loadedItems[i];
             if (!item.mesh || item.isFallen) continue;
-            
+
+            // Skip items that are still settling (KINEMATIC mode)
+            // They don't need velocity capping or bounds checking
+            if (item.becomesDynamicAt && item.becomesDynamicAt > 0) {
+                continue;
+            }
+
             const body = item.mesh.physicsAggregate && item.mesh.physicsAggregate.body;
             this.restoreItemMotionType(item, body, performance.now());
-            
+
             // === POST-PHYSICS VELOCITY CAPPING ===
             // This runs AFTER physics, so we catch any velocity added by collisions/forces
             if (body) {

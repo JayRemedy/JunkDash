@@ -926,26 +926,28 @@ class ItemManager {
             this.scene
         );
 
-        // Set KINEMATIC immediately - before any physics step can run
+        // CRITICAL: Disable ALL collisions and set KINEMATIC immediately to prevent physics impulses
         if (aggregate.body) {
+            // Set KINEMATIC first - body won't respond to forces
             aggregate.body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
+            // Disable ALL collisions during settling - collision mask 0 means no collisions
+            if (aggregate.body.setCollisionFilterMembership) {
+                aggregate.body.setCollisionFilterMembership(0);  // Don't belong to any group
+                aggregate.body.setCollisionFilterCollideMask(0); // Don't collide with anything
+            }
+            // Zero velocities immediately
+            aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
+            aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
         }
         mesh.physicsAggregate = aggregate;
-        
-        // Configure CCD BEFORE any physics steps occur
+
+        // Configure CCD (for later when collisions are re-enabled)
         this.applyCcdSettings(aggregate.body, boxSize);
-        
+
         // Use larger collision margin to create a "buffer zone" around items
         if (aggregate.shape && aggregate.shape.setMargin) {
             const margin = Math.min(0.08, Math.min(boxSize.x, boxSize.y, boxSize.z) * 0.1);
             aggregate.shape.setMargin(margin);
-        }
-        
-        // Set collision filter to ensure items collide with truck walls
-        if (aggregate.body && aggregate.body.setCollisionFilterMembership) {
-            // Items are in group 1, collide with group 1 (other items) and group 2 (truck)
-            aggregate.body.setCollisionFilterMembership(1);
-            aggregate.body.setCollisionFilterCollideMask(1 | 2);
         }
         
         // HIGH damping prevents items from accelerating too fast during physics collisions
