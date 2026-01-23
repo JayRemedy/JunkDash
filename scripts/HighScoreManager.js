@@ -584,5 +584,3 @@ class HighScoreManager {
         return div.innerHTML;
     }
 }
-</script>
-
