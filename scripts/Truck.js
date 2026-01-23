@@ -1,4 +1,3 @@
-<script>
 /**
  * Truck - The box truck entity with cargo area
  * IMPORTANT: Meshes with physics impostors should NOT be parented
@@ -1581,6 +1580,24 @@ class Truck {
         
         this.loadedItems.push(item);
     }
+
+    restoreItemMotionType(item, body, nowMs) {
+        if (!item || !body || !body.setMotionType) return;
+        if (!item._restoreMotionAt || nowMs < item._restoreMotionAt) return;
+        const restoreType = item._restoreMotionType ?? BABYLON.PhysicsMotionType.DYNAMIC;
+        body.setMotionType(restoreType);
+        item._restoreMotionAt = 0;
+        item._restoreMotionType = null;
+    }
+
+    teleportItemBody(item, body, position, rotation, nowMs) {
+        if (!body || !body.setMotionType || !body.getMotionType || !body.setTargetTransform) return;
+        const currentType = body.getMotionType();
+        item._restoreMotionType = currentType;
+        item._restoreMotionAt = nowMs + 50;
+        body.setMotionType(BABYLON.PhysicsMotionType.ANIMATED);
+        body.setTargetTransform(position, rotation);
+    }
     
     updateLoadedItems(dt, moveX, moveZ, rotationDelta) {
         // Items are physics bodies that collide with the truck's animated walls/floor.
@@ -1608,6 +1625,7 @@ class Truck {
             if (!item.mesh) continue;
             
             const body = item.mesh.physicsAggregate && item.mesh.physicsAggregate.body;
+            this.restoreItemMotionType(item, body, itemsNowMs);
             
             // Calculate local position
             const dx = item.mesh.position.x - this.position.x;
@@ -1615,6 +1633,20 @@ class Truck {
             const localX = dx * cos + dz * sin;
             const localZ = -dx * sin + dz * cos;
             
+            if (body && item.dampingBoostUntil && itemsNowMs < item.dampingBoostUntil && !isTruckMoving) {
+                const boostedLinear = Math.max(item.baseLinearDamping || 3.0, 12.0);
+                const boostedAngular = Math.max(item.baseAngularDamping || 8.0, 16.0);
+                if (!item._dampingBoosted) {
+                    item._dampingBoosted = true;
+                    body.setLinearDamping(boostedLinear);
+                    body.setAngularDamping(boostedAngular);
+                }
+            } else if (body && item._dampingBoosted) {
+                body.setLinearDamping(item.baseLinearDamping || 3.0);
+                body.setAngularDamping(item.baseAngularDamping || 8.0);
+                item._dampingBoosted = false;
+            }
+
             // Keep just-placed items from sliding while truck is stationary
             if (item.lockLateralUntil && itemsNowMs < item.lockLateralUntil && !isTruckMoving) {
                 if (body && body.getLinearVelocity && body.setLinearVelocity) {
@@ -1658,6 +1690,10 @@ class Truck {
                 const newWorldZ = this.position.z + clampedLocalX * sin + clampedLocalZ * cos;
                 item.mesh.position.x = newWorldX;
                 item.mesh.position.z = newWorldZ;
+                if (body) {
+                    const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
+                    this.teleportItemBody(item, body, new BABYLON.Vector3(newWorldX, item.mesh.position.y, newWorldZ), quat, itemsNowMs);
+                }
                 
                 // Also clamp velocity toward the wall
                 if (body && body.getLinearVelocity && body.setLinearVelocity) {
@@ -1965,28 +2001,8 @@ class Truck {
                 item.mesh.position.y = worldY;
                 item.mesh.position.z = worldZ;
                 
-                // For Havok, we need to sync the physics body to the mesh position
-                // The transformNode approach: set disablePreStep to false temporarily
-                if (item.mesh.physicsAggregate && item.mesh.physicsAggregate.transformNode) {
-                    // This should sync the physics body to mesh on next physics step
-                    item.mesh.physicsAggregate.transformNode.computeWorldMatrix(true);
-                }
-                
-                // Alternative: directly manipulate body transform if available
-                // Havok bodies have a shape that can be repositioned
-                if (body.setMotionType && body.getMotionType) {
-                    const wasMotionType = body.getMotionType();
-                    // Temporarily make kinematic, move, then restore
-                    body.setMotionType(BABYLON.PhysicsMotionType.ANIMATED);
-                    const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
-                    body.setTargetTransform(new BABYLON.Vector3(worldX, worldY, worldZ), quat);
-                    // Restore to dynamic after a short delay
-                    setTimeout(() => {
-                        if (body.setMotionType) {
-                            body.setMotionType(wasMotionType);
-                        }
-                    }, 50);
-                }
+                const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
+                this.teleportItemBody(item, body, new BABYLON.Vector3(worldX, worldY, worldZ), quat, performance.now());
                 
                 console.log(`📍 TELEPORTED: ${item.id || item.mesh.name} to local(${newLocalX.toFixed(2)}, ${newLocalZ.toFixed(2)})`);
             }
@@ -2354,7 +2370,5 @@ class Truck {
         };
     }
 }
-</script>
-
 
 

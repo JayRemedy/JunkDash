@@ -1,4 +1,3 @@
-<script>
 /**
  * SceneManager - Handles 3D scene, lighting, and camera
  */
@@ -2623,5 +2622,4 @@ class SceneManager {
     
     debugMeshes() {}
 }
-</script>
 

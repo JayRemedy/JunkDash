@@ -1,4 +1,3 @@
-<script>
 /**
  * PhysicsSystem - Manages physics simulation and stability checks
  */
@@ -57,4 +56,3 @@ class PhysicsSystem {
         return items.filter(item => item.isFallen).length;
     }
 }
-</script>

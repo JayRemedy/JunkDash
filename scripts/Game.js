@@ -1,4 +1,3 @@
-<script>
 /**
  * Game - Main game controller
  */
@@ -708,5 +707,4 @@ class Game {
         this.uiManager.showStartScreen();
     }
 }
-</script>
 

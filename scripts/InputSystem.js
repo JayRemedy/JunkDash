@@ -1,4 +1,3 @@
-<script>
 /**
  * InputSystem - Handles mouse, keyboard, and touch input
  */
@@ -360,4 +359,3 @@ class InputSystem {
         }
     }
 }
-</script>

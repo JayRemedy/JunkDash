@@ -1,4 +1,3 @@
-<script>
 /**
  * ItemManager - Handles spawning, managing, and tracking items
  */
@@ -892,9 +891,11 @@ class ItemManager {
         
         // HIGH damping prevents items from accelerating too fast during physics collisions
         // This is critical - without it, items can reach 6+ m/s during a single physics step
+        const baseLinearDamping = 3.0;
+        const baseAngularDamping = 8.0;
         if (aggregate.body) {
-            aggregate.body.setLinearDamping(3.0);   // High damping - slows items quickly
-            aggregate.body.setAngularDamping(8.0);  // Very high angular damping - prevents spinning
+            aggregate.body.setLinearDamping(baseLinearDamping);   // High damping - slows items quickly
+            aggregate.body.setAngularDamping(baseAngularDamping);  // Very high angular damping - prevents spinning
             // Start with zero velocity so item doesn't get pushed by physics
             aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
             aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
@@ -909,7 +910,10 @@ class ItemManager {
             volumeM3: itemDef.volumeM3,
             isPlaced: true,
             isFallen: false,
-            lockLateralUntil: performance.now() + 700
+            lockLateralUntil: performance.now() + 700,
+            dampingBoostUntil: performance.now() + 700,
+            baseLinearDamping,
+            baseAngularDamping
         };
         this.placedItems.push(placedItem);
         
@@ -1046,4 +1050,3 @@ class ItemManager {
         head.parent = boxMesh;
     }
 }
-</script>

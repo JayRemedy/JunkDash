@@ -1,4 +1,3 @@
-<script>
 /**
  * LevelManager - Procedural level generation based on volume
  */
@@ -306,4 +305,3 @@ class LevelManager {
         return Infinity;
     }
 }
-</script>

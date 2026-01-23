@@ -1,4 +1,3 @@
-<script>
 /**
  * UIManager - Handles all UI interactions and updates
  */
@@ -676,4 +675,3 @@ class UIManager {
         }
     }
 }
-</script>
