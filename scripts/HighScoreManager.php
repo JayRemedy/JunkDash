@@ -4,7 +4,7 @@
  */
 class HighScoreManager {
     constructor() {
-        this.apiUrl = '/game/api/highscores.php';
+        this.apiUrl = 'api/highscores.php';
         this.storageKey = 'opl_profiles';
         this.activeProfileKey = 'opl_active_profile';
         
@@ -584,4 +584,3 @@ class HighScoreManager {
     }
 }
 </script>
-
