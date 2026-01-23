@@ -1,4 +1,3 @@
-<script>
 /**
  * ItemManager - Handles spawning, managing, and tracking items
  */
@@ -1051,4 +1050,3 @@ class ItemManager {
         head.parent = boxMesh;
     }
 }
-</script>
