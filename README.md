@@ -9,44 +9,43 @@ Players drive a junk removal truck through a procedurally-generated city, pickin
 ## Tech Stack
 
 - **Babylon.js** - 3D rendering engine
-- **Cannon.js** - Physics engine for item stacking and collisions
-- **PHP** - Server-side scripting (files use `.php` extension for includes)
+- **Havok Physics** - Physics engine for item stacking and collisions
+- **HTML/CSS/JS** - Static site (GitHub Pages friendly)
 - **Web Audio API** - Procedural audio (engine sounds, horn, gear shifts)
 
 ## Directory Structure
 
 ```
 game/
-├── index.php              # Main HTML entry point
+├── index.html             # Main HTML entry point
 ├── README.md              # This file
-├── api/
-│   └── highscores.php     # High score API endpoint
+├── api/                   # (empty in static build; leaderboard uses hosted API)
 ├── assets/
 │   ├── audio/             # Sound effects (tire sounds, ambient)
 │   ├── images/            # UI images and logos
 │   ├── models/            # 3D models (.glb format)
 │   ├── radio/             # Radio station music tracks
 │   └── textures/          # Texture files
-├── scripts/               # Game logic (JavaScript in PHP files)
-│   ├── main.php           # Entry point - initializes Game
-│   ├── Coords.php         # Coordinate system utilities (IMPORTANT)
-│   ├── Game.php           # Main game controller
-│   ├── SceneManager.php   # 3D scene, camera, lighting, world
-│   ├── Truck.php          # Truck entity and driving physics
-│   ├── ItemManager.php    # Item spawning and management
-│   ├── InputSystem.php    # Keyboard, mouse, touch controls
-│   ├── AudioManager.php   # Sound effects and music
-│   ├── UIManager.php      # HUD and UI elements
-│   ├── PhysicsSystem.php  # Physics simulation
-│   ├── LevelManager.php   # Level progression
-│   └── HighScoreManager.php # Score tracking
+├── scripts/               # Game logic (JavaScript files)
+│   ├── main.js            # Entry point - initializes Game
+│   ├── Coords.js          # Coordinate system utilities (IMPORTANT)
+│   ├── Game.js            # Main game controller
+│   ├── SceneManager.js    # 3D scene, camera, lighting, world
+│   ├── Truck.js           # Truck entity and driving physics
+│   ├── ItemManager.js     # Item spawning and management
+│   ├── InputSystem.js     # Keyboard, mouse, touch controls
+│   ├── AudioManager.js    # Sound effects and music
+│   ├── UIManager.js       # HUD and UI elements
+│   ├── PhysicsSystem.js   # Physics simulation
+│   ├── LevelManager.js    # Level progression
+│   └── HighScoreManager.js # Score tracking
 └── styles/
-    └── main.php           # CSS styles
+    └── main.css           # CSS styles
 ```
 
 ## Core Systems
 
-### Game.php - Main Controller
+### Game.js - Main Controller
 The central orchestrator that:
 - Initializes all subsystems
 - Manages game state (loading, playing, paused)
@@ -66,7 +65,7 @@ class Game {
 }
 ```
 
-### SceneManager.php - 3D World
+### SceneManager.js - 3D World
 Manages the entire 3D environment:
 
 **Key Responsibilities:**
@@ -84,7 +83,7 @@ Manages the entire 3D environment:
 - Houses are streamed in using `requestIdleCallback` for performance
 - Custom textures for drop-off locations (square corners vs rounded)
 
-### Truck.php - Vehicle Entity
+### Truck.js - Vehicle Entity
 The player-controlled truck with:
 
 **Driving Physics:**
@@ -109,7 +108,7 @@ cargoWidth: 2.4m
 cargoHeight: 2.2m
 ```
 
-### ItemManager.php - Items
+### ItemManager.js - Items
 Handles all junk items:
 - Item definitions (boxes, furniture, appliances)
 - Spawning items at pickup locations
@@ -117,13 +116,13 @@ Handles all junk items:
 - 3D model loading (.glb files)
 - Item colors and variations
 
-### InputSystem.php - Controls
+### InputSystem.js - Controls
 Supports multiple input methods:
 - **Keyboard:** WASD for driving, Arrow keys for camera
 - **Mouse:** Click to place items, drag to look around
 - **Touch:** Virtual joysticks for mobile, tap to place
 
-### AudioManager.php - Sound
+### AudioManager.js - Sound
 Procedural audio using Web Audio API:
 - Dynamic engine sound (pitch based on speed/RPM)
 - Horn with overtones
@@ -131,7 +130,7 @@ Procedural audio using Web Audio API:
 - Ambient outdoor sounds
 - Radio station with multiple tracks
 
-### UIManager.php - Interface
+### UIManager.js - Interface
 Game HUD elements:
 - Score display (space efficiency)
 - Level indicator
@@ -142,9 +141,9 @@ Game HUD elements:
 
 ## Coordinate Systems
 
-The game uses multiple coordinate systems. To prevent "reversal" bugs, all coordinate logic is centralized in **`Coords.php`**.
+The game uses multiple coordinate systems. To prevent "reversal" bugs, all coordinate logic is centralized in **`Coords.js`**.
 
-### The Coords Utility (`scripts/Coords.php`)
+### The Coords Utility (`scripts/Coords.js`)
 
 This is the **single source of truth** for coordinate conversions:
 
@@ -227,7 +226,7 @@ updateInfiniteGround() {
 
 ## Configuration
 
-### Debug Toggles (Game.php)
+### Debug Toggles (Game.js)
 ```javascript
 debugToggles: {
     houseStreaming: true,   // Enable/disable house loading
@@ -286,4 +285,3 @@ External CDN resources:
 - `babylonjs.loaders.min.js` - Model loaders
 - `cannon.js` - Physics engine
 - Google Fonts (DM Sans, Instrument Serif)
-

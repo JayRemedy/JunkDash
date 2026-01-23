@@ -1,4 +1,3 @@
-<script>
 /**
  * Coords - Centralized coordinate system utilities
  * 
@@ -197,5 +196,4 @@ const Coords = {
 
 // Make available globally
 window.Coords = Coords;
-</script>
 

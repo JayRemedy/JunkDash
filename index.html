@@ -18,8 +18,8 @@
     <!-- Havok Physics (better performance and collision detection) -->
     <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
     
-    <!-- Inline Styles -->
-    <?php include __DIR__ . '/styles/main.php'; ?>
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
     <!-- Loading Screen -->
@@ -223,19 +223,18 @@
         </div>
     </div>
 
-    <!-- Game Scripts (PHP includes for no-cache development) -->
-    <?php include __DIR__ . '/scripts/Coords.php'; ?>
-    <?php include __DIR__ . '/scripts/AudioManager.php'; ?>
-    <?php include __DIR__ . '/scripts/SceneManager.php'; ?>
-    <?php include __DIR__ . '/scripts/PhysicsSystem.php'; ?>
-    <?php include __DIR__ . '/scripts/Truck.php'; ?>
-    <?php include __DIR__ . '/scripts/ItemManager.php'; ?>
-    <?php include __DIR__ . '/scripts/InputSystem.php'; ?>
-    <?php include __DIR__ . '/scripts/UIManager.php'; ?>
-    <?php include __DIR__ . '/scripts/LevelManager.php'; ?>
-    <?php include __DIR__ . '/scripts/HighScoreManager.php'; ?>
-    <?php include __DIR__ . '/scripts/Game.php'; ?>
-    <?php include __DIR__ . '/scripts/main.php'; ?>
+    <!-- Game Scripts -->
+    <script src="scripts/Coords.js"></script>
+    <script src="scripts/AudioManager.js"></script>
+    <script src="scripts/SceneManager.js"></script>
+    <script src="scripts/PhysicsSystem.js"></script>
+    <script src="scripts/Truck.js"></script>
+    <script src="scripts/ItemManager.js"></script>
+    <script src="scripts/InputSystem.js"></script>
+    <script src="scripts/UIManager.js"></script>
+    <script src="scripts/LevelManager.js"></script>
+    <script src="scripts/HighScoreManager.js"></script>
+    <script src="scripts/Game.js"></script>
+    <script src="scripts/main.js"></script>
 </body>
 </html>
-

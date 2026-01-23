@@ -1,4 +1,3 @@
-<script>
 /**
  * AudioManager - Procedural audio for satisfying feedback
  */
@@ -567,5 +566,4 @@ class AudioManager {
         this.updateEngineFrequencies();
     }
 }
-</script>
 
