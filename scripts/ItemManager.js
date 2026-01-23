@@ -912,13 +912,24 @@ class ItemManager {
         // Add physics using Havok PhysicsAggregate
         // VERY HIGH friction so items grip the floor and rotate with the truck
         // Low restitution so items don't bounce off walls
+        // CRITICAL: Start as KINEMATIC to prevent physics impulses during initial placement
         const scaledMass = Math.max(3, itemDef.weight * 2.5);
         const aggregate = new BABYLON.PhysicsAggregate(
             mesh,
             BABYLON.PhysicsShapeType.BOX,
-            { mass: scaledMass, restitution: 0.01, friction: 10.0 },  // friction 10 = very grippy
+            {
+                mass: scaledMass,
+                restitution: 0.01,
+                friction: 10.0,
+                startAsleep: true  // Start asleep to prevent any initial physics impulses
+            },
             this.scene
         );
+
+        // Set KINEMATIC immediately - before any physics step can run
+        if (aggregate.body) {
+            aggregate.body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
+        }
         mesh.physicsAggregate = aggregate;
         
         // Configure CCD BEFORE any physics steps occur
@@ -941,21 +952,18 @@ class ItemManager {
         const baseLinearDamping = 3.0;
         const baseAngularDamping = 8.0;
 
-        // CRITICAL FIX: Start items as KINEMATIC to prevent physics impulses during placement
-        // This stops the physics engine from applying huge forces when items overlap geometry
+        // Configure damping (body is already KINEMATIC from aggregate creation)
         if (aggregate.body) {
             aggregate.body.setLinearDamping(baseLinearDamping);
             aggregate.body.setAngularDamping(baseAngularDamping);
             aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
             aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
-
-            // Start as KINEMATIC - immune to physics forces during settling
-            aggregate.body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
         }
 
         const nowMs = performance.now();
 
         // Track placed item (include volumeM3 which has packing factor applied)
+        // Use longer settling time (300ms) to ensure no physics issues during placement
         const placedItem = {
             id: itemDef.id,
             mesh: mesh,
@@ -964,10 +972,10 @@ class ItemManager {
             volumeM3: itemDef.volumeM3,
             isPlaced: true,
             isFallen: false,
-            // Time when item becomes DYNAMIC (physics-enabled)
-            becomesDynamicAt: nowMs + 150,
-            lockLateralUntil: nowMs + 700,
-            dampingBoostUntil: nowMs + 700,
+            // Time when item becomes DYNAMIC (physics-enabled) - 300ms settling period
+            becomesDynamicAt: nowMs + 300,
+            lockLateralUntil: nowMs + 800,
+            dampingBoostUntil: nowMs + 800,
             baseLinearDamping,
             baseAngularDamping
         };

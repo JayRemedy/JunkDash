@@ -1666,6 +1666,12 @@ class Truck {
                 item.lockLateralUntil = itemsNowMs + 300;
             }
 
+            // Skip all physics processing for items still settling (KINEMATIC mode)
+            // They don't need velocity capping or position clamping
+            if (item.becomesDynamicAt && item.becomesDynamicAt > 0) {
+                continue; // Skip to next item
+            }
+
             // Calculate local position
             const dx = item.mesh.position.x - this.position.x;
             const dz = item.mesh.position.z - this.position.z;
