@@ -910,35 +910,22 @@ class ItemManager {
         this.sceneManager.addShadowCaster(mesh);
         
         // Add physics using Havok PhysicsAggregate
-        // VERY HIGH friction so items grip the floor and rotate with the truck
-        // Low restitution so items don't bounce off walls
-        // CRITICAL: Start as KINEMATIC to prevent physics impulses during initial placement
+        // CRITICAL: Use mass=0 to create a STATIC body that won't respond to collision impulses
+        // during the constructor. We'll add mass later when settling is complete.
         const scaledMass = Math.max(3, itemDef.weight * 2.5);
         const aggregate = new BABYLON.PhysicsAggregate(
             mesh,
             BABYLON.PhysicsShapeType.BOX,
             {
-                mass: scaledMass,
+                mass: 0,  // STATIC - no collision response during creation
                 restitution: 0.01,
-                friction: 10.0,
-                startAsleep: true  // Start asleep to prevent any initial physics impulses
+                friction: 10.0
             },
             this.scene
         );
 
-        // CRITICAL: Disable ALL collisions and set KINEMATIC immediately to prevent physics impulses
-        if (aggregate.body) {
-            // Set KINEMATIC first - body won't respond to forces
-            aggregate.body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
-            // Disable ALL collisions during settling - collision mask 0 means no collisions
-            if (aggregate.body.setCollisionFilterMembership) {
-                aggregate.body.setCollisionFilterMembership(0);  // Don't belong to any group
-                aggregate.body.setCollisionFilterCollideMask(0); // Don't collide with anything
-            }
-            // Zero velocities immediately
-            aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
-            aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
-        }
+        // Store the intended mass for later
+        mesh._intendedMass = scaledMass;
         mesh.physicsAggregate = aggregate;
 
         // Configure CCD (for later when collisions are re-enabled)

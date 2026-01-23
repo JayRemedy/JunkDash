@@ -1649,20 +1649,38 @@ class Truck {
             // Restore items that were temporarily made KINEMATIC for teleportation
             this.restoreItemMotionType(item, body, itemsNowMs);
 
-            // Transition newly placed items from KINEMATIC to DYNAMIC after settling
+            // Transition newly placed items from STATIC to DYNAMIC after settling
             if (body && item.becomesDynamicAt && itemsNowMs >= item.becomesDynamicAt) {
-                // Clear velocities before enabling physics to prevent explosion
+                // Get the intended mass from the mesh
+                const intendedMass = item.mesh._intendedMass || 10;
+
+                // Set mass properties to make it a DYNAMIC body
+                // This converts from STATIC (mass=0) to DYNAMIC (mass>0)
+                if (body.setMassProperties) {
+                    body.setMassProperties({
+                        mass: intendedMass,
+                        centerOfMass: BABYLON.Vector3.Zero(),
+                        inertia: new BABYLON.Vector3(intendedMass, intendedMass, intendedMass)
+                    });
+                }
+
+                // Clear velocities to ensure clean start
                 body.setLinearVelocity(BABYLON.Vector3.Zero());
                 body.setAngularVelocity(BABYLON.Vector3.Zero());
+
                 // Apply high damping temporarily for smooth transition
                 body.setLinearDamping(15.0);
                 body.setAngularDamping(20.0);
-                // Re-enable collisions now that item is settled
+
+                // Set collision filters
                 if (body.setCollisionFilterMembership) {
                     body.setCollisionFilterMembership(1);  // Items group
                     body.setCollisionFilterCollideMask(1 | 2);  // Collide with items and truck
                 }
+
+                // Now set to DYNAMIC motion type
                 body.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
+
                 item.becomesDynamicAt = 0; // Only do this once
                 // Reset damping after a delay
                 item.dampingBoostUntil = itemsNowMs + 500;
