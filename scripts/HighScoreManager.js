@@ -4,6 +4,8 @@
 class HighScoreManager {
     constructor() {
         this.apiUrl = 'https://www.junkdoctorsnj.com/game/api/highscores.php';
+        this.apiUrl = 'https://www.junkdoctorsnj.com/game/api/highscores.php';
+        this.apiUrl = 'api/highscores.php';
         this.storageKey = 'opl_profiles';
         this.activeProfileKey = 'opl_active_profile';
         
@@ -582,3 +584,5 @@ class HighScoreManager {
         return div.innerHTML;
     }
 }
+</script>
+
