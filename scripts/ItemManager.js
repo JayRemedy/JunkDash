@@ -81,6 +81,53 @@ class ItemManager {
         
         body._ccdConfigured = true;
     }
+
+    _worldToTruckLocalXZ(worldX, worldZ) {
+        const cos = Math.cos(this.truck.rotation);
+        const sin = Math.sin(this.truck.rotation);
+        const dx = worldX - this.truck.position.x;
+        const dz = worldZ - this.truck.position.z;
+        return {
+            x: dx * cos + dz * sin,
+            z: -dx * sin + dz * cos
+        };
+    }
+
+    _truckLocalToWorldXZ(localX, localZ) {
+        const cos = Math.cos(this.truck.rotation);
+        const sin = Math.sin(this.truck.rotation);
+        return {
+            x: this.truck.position.x + localX * cos - localZ * sin,
+            z: this.truck.position.z + localX * sin + localZ * cos
+        };
+    }
+
+    _getHalfExtentsXZForRotation(boxSize, yawRel) {
+        const cos = Math.abs(Math.cos(yawRel));
+        const sin = Math.abs(Math.sin(yawRel));
+        return {
+            halfX: 0.5 * (boxSize.x * cos + boxSize.z * sin),
+            halfZ: 0.5 * (boxSize.x * sin + boxSize.z * cos)
+        };
+    }
+
+    _clampWorldPointToCargo(worldX, worldZ, boxSize, yawRel) {
+        const local = this._worldToTruckLocalXZ(worldX, worldZ);
+        const { halfX, halfZ } = this._getHalfExtentsXZForRotation(boxSize, yawRel);
+
+        const wallMargin = 0.10;
+        const itemMargin = Math.min(0.08, Math.min(boxSize.x, boxSize.y, boxSize.z) * 0.1);
+        const safety = wallMargin + itemMargin + 0.02;
+
+        const minX = -this.truck.cargoWidth / 2 + halfX + safety;
+        const maxX = this.truck.cargoWidth / 2 - halfX - safety;
+        const minZ = -this.truck.cargoLength / 2 + halfZ + safety;
+        const maxZ = this.truck.cargoLength / 2 - halfZ - safety;
+
+        const clampedX = Math.max(minX, Math.min(maxX, local.x));
+        const clampedZ = Math.max(minZ, Math.min(maxZ, local.z));
+        return this._truckLocalToWorldXZ(clampedX, clampedZ);
+    }
     
     // Get color for item type (randomizes brown shades for boxes)
     getItemColor(itemType) {
@@ -733,13 +780,14 @@ class ItemManager {
     updatePreview(x, z, rotation) {
         if (!this.previewMesh || !this.previewItemDef) return;
         
-        const itemHeight = this.getItemBoxSize(this.previewItemDef).y;
-        const y = this.findPlacementY(x, z, itemHeight);
+        const boxSize = this.getItemBoxSize(this.previewItemDef);
+        const clamped = this._clampWorldPointToCargo(x, z, boxSize, rotation);
+        const y = this.findPlacementY(clamped.x, clamped.z, boxSize.y);
         
-        this.previewMesh.position = new BABYLON.Vector3(x, y, z);
+        this.previewMesh.position = new BABYLON.Vector3(clamped.x, y, clamped.z);
         // Add truck rotation so preview orients with truck
         this.previewMesh.rotation.y = rotation + this.truck.rotation;
-        this.updateHeldItemLabel(itemHeight);
+        this.updateHeldItemLabel(boxSize.y);
         
         // Check validity and update color
         const isValid = this.isValidPlacement(this.previewMesh);
@@ -755,7 +803,7 @@ class ItemManager {
             });
         }
         
-        return { x, y, z, isValid };
+        return { x: clamped.x, y, z: clamped.z, isValid };
     }
 
     createHeldItemLabel(text, itemHeight) {
@@ -846,7 +894,7 @@ class ItemManager {
         
         // Place at preview position with tiny lift to prevent spawning inside floor
         // This prevents physics from pushing the item due to floor collision
-        mesh.position = new BABYLON.Vector3(placeX, placeY + 0.05, placeZ);
+        mesh.position = new BABYLON.Vector3(placeX, placeY + 0.005, placeZ);
         
         // Attach 3D model if available
         this.attachModelIfAvailable(mesh, itemDef, { boxSize });
@@ -959,8 +1007,22 @@ class ItemManager {
         
         // Only check height - allow risky edge placements (physics will decide if it falls)
         if (pos.y + halfH > bounds.maxY) return false;
-        
-        return true;
+
+        const boxSize = this.previewItemDef ? this.getItemBoxSize(this.previewItemDef) : bb.extendSize.scale(2);
+        const yawRel = (mesh.rotationQuaternion ? mesh.rotationQuaternion.toEulerAngles().y : mesh.rotation.y) - this.truck.rotation;
+        const { halfX, halfZ } = this._getHalfExtentsXZForRotation(boxSize, yawRel);
+        const local = this._worldToTruckLocalXZ(pos.x, pos.z);
+
+        const wallMargin = 0.10;
+        const itemMargin = Math.min(0.08, Math.min(boxSize.x, boxSize.y, boxSize.z) * 0.1);
+        const safety = wallMargin + itemMargin + 0.02;
+
+        const minX = -this.truck.cargoWidth / 2 + halfX + safety;
+        const maxX = this.truck.cargoWidth / 2 - halfX - safety;
+        const minZ = -this.truck.cargoLength / 2 + halfZ + safety;
+        const maxZ = this.truck.cargoLength / 2 - halfZ - safety;
+
+        return local.x >= minX && local.x <= maxX && local.z >= minZ && local.z <= maxZ;
     }
     
     areAllItemsPlaced() {

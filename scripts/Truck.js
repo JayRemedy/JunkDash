@@ -1130,7 +1130,7 @@ class Truck {
     updateDriving(deltaTime, options = {}) {
         const perfEnabled = this.enablePerfStats === true;
         const perfStart = perfEnabled ? performance.now() : 0;
-        const dt = Math.min(deltaTime, 0.1); // Cap delta time
+        const dt = Math.min(deltaTime, 0.05); // Cap delta time
         const inputEnabled = options.inputEnabled !== false;
         
         // Debug logging (only log once per second to avoid spam)
@@ -1325,8 +1325,14 @@ class Truck {
         
         // Calculate movement direction - during drift, movement is offset from facing
         const moveDirection = this.rotation + this.driftAngle;
-        const moveX = Math.sin(moveDirection) * this.speed * dt;
-        const moveZ = Math.cos(moveDirection) * this.speed * dt;
+        // Convert MPH to m/s for world/physics units.
+        const speedMps = this.speed * 0.44704;
+        const moveX = Math.sin(moveDirection) * speedMps * dt;
+        const moveZ = Math.cos(moveDirection) * speedMps * dt;
+
+        // Store truck world velocity for relative item stabilization (m/s)
+        this._truckWorldVelX = dt > 0 ? (moveX / dt) : 0;
+        this._truckWorldVelZ = dt > 0 ? (moveZ / dt) : 0;
         
         const newPosX = this.position.x + moveX;
         const newPosZ = this.position.z + moveZ;
@@ -1583,10 +1589,9 @@ class Truck {
 
     restoreItemMotionType(item, body, nowMs) {
         if (!item || !body || !body.setMotionType) return;
-        if (!item._restoreMotionAt || nowMs < item._restoreMotionAt) return;
+        if (item._restoreMotionType == null) return;
         const restoreType = item._restoreMotionType ?? BABYLON.PhysicsMotionType.DYNAMIC;
         body.setMotionType(restoreType);
-        item._restoreMotionAt = 0;
         item._restoreMotionType = null;
     }
 
@@ -1594,7 +1599,6 @@ class Truck {
         if (!body || !body.setMotionType || !body.getMotionType || !body.setTargetTransform) return;
         const currentType = body.getMotionType();
         item._restoreMotionType = currentType;
-        item._restoreMotionAt = nowMs + 50;
         body.setMotionType(BABYLON.PhysicsMotionType.ANIMATED);
         body.setTargetTransform(position, rotation);
     }
@@ -1611,9 +1615,12 @@ class Truck {
         const isTruckMoving = Math.abs(this.speed) > 0.5;
         
         // STRICT velocity limits - items should never move this fast relative to truck
-        const MAX_LINEAR_VELOCITY = 5.0;   // 5 m/s max (was 50!)
+        const MAX_REL_LINEAR_VELOCITY = 8.0;   // 8 m/s max relative motion
         const MAX_ANGULAR_VELOCITY = 3.0;  // 3 rad/s max (was uncapped)
         const MAX_VERTICAL_VELOCITY = 4.0; // 4 m/s max vertical
+
+        const truckVelX = dt > 0 ? (moveX / dt) : 0;
+        const truckVelZ = dt > 0 ? (moveZ / dt) : 0;
         
         let riskLines = [];
         const diagNowMs = performance.now();
@@ -1625,7 +1632,6 @@ class Truck {
             if (!item.mesh) continue;
             
             const body = item.mesh.physicsAggregate && item.mesh.physicsAggregate.body;
-            this.restoreItemMotionType(item, body, itemsNowMs);
             
             // Calculate local position
             const dx = item.mesh.position.x - this.position.x;
@@ -1732,22 +1738,26 @@ class Truck {
                 if (body.getLinearVelocity && body.setLinearVelocity) {
                     const vel = body.getLinearVelocity();
                     if (vel) {
-                        const horizSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+                        const relX = vel.x - truckVelX;
+                        const relZ = vel.z - truckVelZ;
+                        const relSpeed = Math.sqrt(relX * relX + relZ * relZ);
                         
                         // ALWAYS cap if over limit - log every time for debugging
-                        if (horizSpeed > MAX_LINEAR_VELOCITY) {
-                            const scale = MAX_LINEAR_VELOCITY / horizSpeed;
+                        if (relSpeed > MAX_REL_LINEAR_VELOCITY) {
+                            const scale = MAX_REL_LINEAR_VELOCITY / relSpeed;
                             const newVel = new BABYLON.Vector3(
-                                vel.x * scale,
+                                truckVelX + relX * scale,
                                 Math.max(-MAX_VERTICAL_VELOCITY, Math.min(MAX_VERTICAL_VELOCITY, vel.y)),
-                                vel.z * scale
+                                truckVelZ + relZ * scale
                             );
                             body.setLinearVelocity(newVel);
                             
                             // Verify it actually changed
                             const verifyVel = body.getLinearVelocity();
-                            const verifySpeed = verifyVel ? Math.sqrt(verifyVel.x * verifyVel.x + verifyVel.z * verifyVel.z) : -1;
-                            console.warn(`🔴 PRE-PHYSICS CAP: ${item.id || item.mesh.name} ${horizSpeed.toFixed(2)} -> ${MAX_LINEAR_VELOCITY} (verify: ${verifySpeed.toFixed(2)})`);
+                            const verifyRelX = verifyVel ? verifyVel.x - truckVelX : 0;
+                            const verifyRelZ = verifyVel ? verifyVel.z - truckVelZ : 0;
+                            const verifySpeed = verifyVel ? Math.sqrt(verifyRelX * verifyRelX + verifyRelZ * verifyRelZ) : -1;
+                            console.warn(`🔴 PRE-PHYSICS CAP: ${item.id || item.mesh.name} rel ${relSpeed.toFixed(2)} -> ${MAX_REL_LINEAR_VELOCITY} (verify: ${verifySpeed.toFixed(2)})`);
                         } else if (Math.abs(vel.y) > MAX_VERTICAL_VELOCITY) {
                             body.setLinearVelocity(new BABYLON.Vector3(
                                 vel.x, 
@@ -1825,7 +1835,7 @@ class Truck {
         }
         
         if (canLog && riskLines.length > 0) {
-            const speedMph = Math.abs(this.speed) * 2.237;
+            const speedMph = Math.abs(this.speed);
             const header = [
                 `[ItemDiag] t=${(diagNowMs / 1000).toFixed(1)}s`,
                 `spd=${speedMph.toFixed(1)}mph`,
@@ -1868,15 +1878,19 @@ class Truck {
         const floorY = this.floorTopY - 0.5;
         
         // Velocity limits - MUST match updateLoadedItems
-        const MAX_LINEAR_VELOCITY = 5.0;
+        const MAX_REL_LINEAR_VELOCITY = 8.0;
         const MAX_ANGULAR_VELOCITY = 3.0;
         const MAX_VERTICAL_VELOCITY = 4.0;
+
+        const truckVelX = this._truckWorldVelX || 0;
+        const truckVelZ = this._truckWorldVelZ || 0;
         
         for (let i = 0; i < this.loadedItems.length; i++) {
             const item = this.loadedItems[i];
             if (!item.mesh || item.isFallen) continue;
             
             const body = item.mesh.physicsAggregate && item.mesh.physicsAggregate.body;
+            this.restoreItemMotionType(item, body, performance.now());
             
             // === POST-PHYSICS VELOCITY CAPPING ===
             // This runs AFTER physics, so we catch any velocity added by collisions/forces
@@ -1887,17 +1901,19 @@ class Truck {
                 if (body.getLinearVelocity && body.setLinearVelocity) {
                     const vel = body.getLinearVelocity();
                     if (vel) {
-                        const horizSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+                        const relX = vel.x - truckVelX;
+                        const relZ = vel.z - truckVelZ;
+                        const relSpeed = Math.sqrt(relX * relX + relZ * relZ);
                         let newVelX = vel.x;
                         let newVelZ = vel.z;
                         let newVelY = vel.y;
                         
-                        if (horizSpeed > MAX_LINEAR_VELOCITY) {
-                            const scale = MAX_LINEAR_VELOCITY / horizSpeed;
-                            newVelX = vel.x * scale;
-                            newVelZ = vel.z * scale;
+                        if (relSpeed > MAX_REL_LINEAR_VELOCITY) {
+                            const scale = MAX_REL_LINEAR_VELOCITY / relSpeed;
+                            newVelX = truckVelX + relX * scale;
+                            newVelZ = truckVelZ + relZ * scale;
                             linearCapped = true;
-                            console.warn(`⚡ POST-PHYSICS velocity cap: ${item.id || item.mesh.name} horiz ${horizSpeed.toFixed(2)} -> ${MAX_LINEAR_VELOCITY}`);
+                            console.warn(`⚡ POST-PHYSICS velocity cap: ${item.id || item.mesh.name} rel ${relSpeed.toFixed(2)} -> ${MAX_REL_LINEAR_VELOCITY}`);
                         }
                         if (Math.abs(vel.y) > MAX_VERTICAL_VELOCITY) {
                             newVelY = Math.sign(vel.y) * MAX_VERTICAL_VELOCITY;
@@ -2185,7 +2201,7 @@ class Truck {
                 depth: floorDepth
             }, this.scene);
             // Center the floor, shifted forward slightly
-            this.truckFloorMesh.position.set(0, this.floorTopY - 0.12, backGap / 2);
+            this.truckFloorMesh.position.set(0, this.floorTopY - 0.12, -backGap / 2);
             this.truckFloorMesh.isVisible = false;
             this.truckFloorMesh.isPickable = false;
             
@@ -2370,5 +2386,3 @@ class Truck {
         };
     }
 }
-
-
