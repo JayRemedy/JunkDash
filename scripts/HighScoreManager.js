@@ -1,4 +1,3 @@
-<script>
 /**
  * HighScoreManager - Handles multiple player profiles and leaderboard API
  */

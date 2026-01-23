@@ -1,4 +1,3 @@
-<script>
 /**
  * Truck - The box truck entity with cargo area
  * IMPORTANT: Meshes with physics impostors should NOT be parented
