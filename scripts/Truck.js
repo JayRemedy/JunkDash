@@ -1589,18 +1589,31 @@ class Truck {
 
     restoreItemMotionType(item, body, nowMs) {
         if (!item || !body || !body.setMotionType) return;
-        if (item._restoreMotionType == null) return;
+        if (!item._restoreMotionAt || nowMs < item._restoreMotionAt) return;
         const restoreType = item._restoreMotionType ?? BABYLON.PhysicsMotionType.DYNAMIC;
+        // CRITICAL: Zero velocities before restoring to prevent explosion
+        if (body.setLinearVelocity) body.setLinearVelocity(BABYLON.Vector3.Zero());
+        if (body.setAngularVelocity) body.setAngularVelocity(BABYLON.Vector3.Zero());
         body.setMotionType(restoreType);
+        item._restoreMotionAt = 0;
         item._restoreMotionType = null;
     }
 
     teleportItemBody(item, body, position, rotation, nowMs) {
-        if (!body || !body.setMotionType || !body.getMotionType || !body.setTargetTransform) return;
+        if (!body || !body.setMotionType || !body.getMotionType) return;
         const currentType = body.getMotionType();
         item._restoreMotionType = currentType;
-        body.setMotionType(BABYLON.PhysicsMotionType.ANIMATED);
-        body.setTargetTransform(position, rotation);
+        // Use KINEMATIC (not ANIMATED) to fully disable physics responses
+        // Longer settle time to ensure no residual forces
+        item._restoreMotionAt = nowMs + 150;
+        body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
+        // Zero velocities immediately
+        if (body.setLinearVelocity) body.setLinearVelocity(BABYLON.Vector3.Zero());
+        if (body.setAngularVelocity) body.setAngularVelocity(BABYLON.Vector3.Zero());
+        // Direct position update for KINEMATIC bodies
+        if (body.setTargetTransform) {
+            body.setTargetTransform(position, rotation);
+        }
     }
     
     updateLoadedItems(dt, moveX, moveZ, rotationDelta) {
@@ -1630,9 +1643,29 @@ class Truck {
         for (let i = 0; i < this.loadedItems.length; i++) {
             const item = this.loadedItems[i];
             if (!item.mesh) continue;
-            
+
             const body = item.mesh.physicsAggregate && item.mesh.physicsAggregate.body;
-            
+
+            // Restore items that were temporarily made KINEMATIC for teleportation
+            this.restoreItemMotionType(item, body, itemsNowMs);
+
+            // Transition newly placed items from KINEMATIC to DYNAMIC after settling
+            if (body && item.becomesDynamicAt && itemsNowMs >= item.becomesDynamicAt) {
+                // Clear velocities before enabling physics to prevent explosion
+                body.setLinearVelocity(BABYLON.Vector3.Zero());
+                body.setAngularVelocity(BABYLON.Vector3.Zero());
+                // Apply high damping temporarily for smooth transition
+                body.setLinearDamping(15.0);
+                body.setAngularDamping(20.0);
+                body.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
+                item.becomesDynamicAt = 0; // Only do this once
+                // Reset damping after a delay
+                item.dampingBoostUntil = itemsNowMs + 500;
+                item._dampingBoosted = true;
+                // Also lock lateral movement briefly
+                item.lockLateralUntil = itemsNowMs + 300;
+            }
+
             // Calculate local position
             const dx = item.mesh.position.x - this.position.x;
             const dz = item.mesh.position.z - this.position.z;

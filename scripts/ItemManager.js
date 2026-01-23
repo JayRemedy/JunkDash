@@ -938,17 +938,23 @@ class ItemManager {
         }
         
         // HIGH damping prevents items from accelerating too fast during physics collisions
-        // This is critical - without it, items can reach 6+ m/s during a single physics step
         const baseLinearDamping = 3.0;
         const baseAngularDamping = 8.0;
+
+        // CRITICAL FIX: Start items as KINEMATIC to prevent physics impulses during placement
+        // This stops the physics engine from applying huge forces when items overlap geometry
         if (aggregate.body) {
-            aggregate.body.setLinearDamping(baseLinearDamping);   // High damping - slows items quickly
-            aggregate.body.setAngularDamping(baseAngularDamping);  // Very high angular damping - prevents spinning
-            // Start with zero velocity so item doesn't get pushed by physics
+            aggregate.body.setLinearDamping(baseLinearDamping);
+            aggregate.body.setAngularDamping(baseAngularDamping);
             aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
             aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+
+            // Start as KINEMATIC - immune to physics forces during settling
+            aggregate.body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
         }
-        
+
+        const nowMs = performance.now();
+
         // Track placed item (include volumeM3 which has packing factor applied)
         const placedItem = {
             id: itemDef.id,
@@ -958,8 +964,10 @@ class ItemManager {
             volumeM3: itemDef.volumeM3,
             isPlaced: true,
             isFallen: false,
-            lockLateralUntil: performance.now() + 700,
-            dampingBoostUntil: performance.now() + 700,
+            // Time when item becomes DYNAMIC (physics-enabled)
+            becomesDynamicAt: nowMs + 150,
+            lockLateralUntil: nowMs + 700,
+            dampingBoostUntil: nowMs + 700,
             baseLinearDamping,
             baseAngularDamping
         };
