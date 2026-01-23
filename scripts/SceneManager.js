@@ -2622,5 +2622,4 @@ class SceneManager {
     
     debugMeshes() {}
 }
-</script>
 

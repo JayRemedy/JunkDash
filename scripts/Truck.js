@@ -2370,6 +2370,4 @@ class Truck {
         };
     }
 }
-</script>
-
 

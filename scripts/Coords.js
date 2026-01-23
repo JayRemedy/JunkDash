@@ -196,5 +196,4 @@ const Coords = {
 
 // Make available globally
 window.Coords = Coords;
-</script>
 

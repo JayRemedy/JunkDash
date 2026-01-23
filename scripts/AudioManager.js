@@ -104,7 +104,7 @@ class AudioManager {
     
     async loadRadioTracks() {
         try {
-            const response = await fetch('assets/radio/list.php');
+            const response = await fetch('assets/radio/list.json');
             const data = await response.json();
             if (Array.isArray(data) && data.length > 0) {
                 this.radioTracks = data;
@@ -566,5 +566,3 @@ class AudioManager {
         this.updateEngineFrequencies();
     }
 }
-</script>
-

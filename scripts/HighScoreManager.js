@@ -3,7 +3,11 @@
  */
 class HighScoreManager {
     constructor() {
+<<<<<<<< HEAD:scripts/HighScoreManager.js
+        this.apiUrl = 'https://www.junkdoctorsnj.com/game/api/highscores.php';
+========
         this.apiUrl = 'api/highscores.php';
+>>>>>>>> origin/main:scripts/HighScoreManager.php
         this.storageKey = 'opl_profiles';
         this.activeProfileKey = 'opl_active_profile';
         
@@ -582,4 +586,7 @@ class HighScoreManager {
         return div.innerHTML;
     }
 }
+<<<<<<<< HEAD:scripts/HighScoreManager.js
+========
 </script>
+>>>>>>>> origin/main:scripts/HighScoreManager.php

@@ -19,8 +19,7 @@ Players drive a junk removal truck through a procedurally-generated city, pickin
 game/
 ├── index.html             # Main HTML entry point
 ├── README.md              # This file
-├── api/
-│   └── highscores.php     # High score API endpoint
+├── api/                   # (empty in static build; leaderboard uses hosted API)
 ├── assets/
 │   ├── audio/             # Sound effects (tire sounds, ambient)
 │   ├── images/            # UI images and logos

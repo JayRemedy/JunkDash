@@ -707,5 +707,4 @@ class Game {
         this.uiManager.showStartScreen();
     }
 }
-</script>
 
