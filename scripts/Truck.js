@@ -2242,12 +2242,7 @@ class Truck {
     syncPhysicsBodies() {
         // Update all truck physics bodies to follow the truck
         if (!this.truckPhysicsAggregates) return;
-
-        // IMPORTANT: Negate rotation for Babylon.js convention
-        const cos = Math.cos(-this.rotation);
-        const sin = Math.sin(-this.rotation);
-        const truckX = this.position.x;
-        const truckZ = this.position.z;
+        if (!this.root) return;
         
         // Cache rotation quaternion - use same rotation as visual truck
         // Note: Position calc uses -rotation, but quaternion should match visual truck directly
@@ -2265,7 +2260,7 @@ class Truck {
         const nowMs = performance.now();
         if (!this._lastPhysicsSyncLog || nowMs - this._lastPhysicsSyncLog > 2000) {
             this._lastPhysicsSyncLog = nowMs;
-            console.log(`🔧 Physics sync: truck=(${truckX.toFixed(2)}, ${truckZ.toFixed(2)}) rot=${(this.rotation * 180 / Math.PI).toFixed(1)}° root.rot.y=${(this.root.rotation.y * 180 / Math.PI).toFixed(1)}°`);
+            console.log(`🔧 Physics sync: truck=(${this.position.x.toFixed(2)}, ${this.position.z.toFixed(2)}) rot=${(this.rotation * 180 / Math.PI).toFixed(1)}° root.rot.y=${(this.root.rotation.y * 180 / Math.PI).toFixed(1)}°`);
         }
         
         for (let i = 0; i < this.truckPhysicsAggregates.length; i++) {
@@ -2283,12 +2278,12 @@ class Truck {
                 continue;
             }
             
-            // Transform to world position
-            const worldX = truckX + localX * cos - localZ * sin;
-            const worldZ = truckZ + localX * sin + localZ * cos;
-            
+            // Transform to world position using Babylon's actual matrix
+            const localVec = new BABYLON.Vector3(localX, localY, localZ);
+            const worldVec = BABYLON.Vector3.TransformCoordinates(localVec, this.root.getWorldMatrix());
+
             // Update mesh position and rotation
-            mesh.position.set(worldX, localY, worldZ);
+            mesh.position.set(worldVec.x, worldVec.y, worldVec.z);
             if (!mesh.rotationQuaternion) {
                 mesh.rotationQuaternion = BABYLON.Quaternion.Identity();
             }
@@ -2296,7 +2291,7 @@ class Truck {
             
             // IMPORTANT: For Havok animated bodies, we must set the target transform
             // on the physics body, not just update the mesh
-            this._physicsTargetPos.set(worldX, localY, worldZ);
+            this._physicsTargetPos.set(worldVec.x, worldVec.y, worldVec.z);
             aggregate.body.setTargetTransform(this._physicsTargetPos, this._physicsRotQuat);
         }
     }

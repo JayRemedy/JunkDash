@@ -83,7 +83,15 @@ class ItemManager {
     }
 
     _worldToTruckLocalXZ(worldX, worldZ) {
-        // IMPORTANT: Negate rotation for Babylon.js convention
+        // Use Babylon's actual inverse world matrix for accurate transformation
+        if (this.truck.root) {
+            const worldVec = new BABYLON.Vector3(worldX, 0, worldZ);
+            const invMatrix = this.truck.root.getWorldMatrix().clone();
+            invMatrix.invert();
+            const localVec = BABYLON.Vector3.TransformCoordinates(worldVec, invMatrix);
+            return { x: localVec.x, z: localVec.z };
+        }
+        // Fallback to manual calculation
         const cos = Math.cos(-this.truck.rotation);
         const sin = Math.sin(-this.truck.rotation);
         const dx = worldX - this.truck.position.x;
@@ -95,7 +103,13 @@ class ItemManager {
     }
 
     _truckLocalToWorldXZ(localX, localZ) {
-        // IMPORTANT: Negate rotation for Babylon.js convention
+        // Use Babylon's actual world matrix for accurate transformation
+        if (this.truck.root) {
+            const localVec = new BABYLON.Vector3(localX, 0, localZ);
+            const worldVec = BABYLON.Vector3.TransformCoordinates(localVec, this.truck.root.getWorldMatrix());
+            return { x: worldVec.x, z: worldVec.z };
+        }
+        // Fallback to manual calculation
         const cos = Math.cos(-this.truck.rotation);
         const sin = Math.sin(-this.truck.rotation);
         return {
