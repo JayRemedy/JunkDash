@@ -2249,7 +2249,8 @@ class Truck {
         const truckX = this.position.x;
         const truckZ = this.position.z;
         
-        // Cache rotation quaternion
+        // Cache rotation quaternion - use same rotation as visual truck
+        // Note: Position calc uses -rotation, but quaternion should match visual truck directly
         if (!this._physicsRotQuat) {
             this._physicsRotQuat = BABYLON.Quaternion.Identity();
         }
@@ -2260,20 +2261,11 @@ class Truck {
             this._physicsTargetPos = new BABYLON.Vector3();
         }
         
-        // First-time sync logging - CRITICAL for debugging wall positions
-        if (!this._physicsSyncLogged) {
-            this._physicsSyncLogged = true;
-            console.log('🔧 First physics sync - wall positions:');
-            console.log(`   Truck at: (${truckX.toFixed(2)}, ${truckZ.toFixed(2)}) rot=${this.rotation.toFixed(3)}`);
-            console.log(`   Cargo area: width=${this.cargoWidth}m, length=${this.cargoLength}m`);
-            console.log(`   Expected wall inner edges: X=±${(this.cargoWidth/2).toFixed(2)}, frontZ=${(-this.cargoLength/2).toFixed(2)}`);
-            this.truckPhysicsAggregates.forEach(({ mesh, aggregate }) => {
-                if (mesh && mesh._localPosX !== undefined) {
-                    const worldX = truckX + mesh._localPosX * cos - mesh._localPosZ * sin;
-                    const worldZ = truckZ + mesh._localPosX * sin + mesh._localPosZ * cos;
-                    console.log(`   ${mesh.name}: local(${mesh._localPosX.toFixed(2)}, ${mesh._localPosZ.toFixed(2)}) -> world(${worldX.toFixed(2)}, ${worldZ.toFixed(2)})`);
-                }
-            });
+        // Periodic sync logging for debugging
+        const nowMs = performance.now();
+        if (!this._lastPhysicsSyncLog || nowMs - this._lastPhysicsSyncLog > 2000) {
+            this._lastPhysicsSyncLog = nowMs;
+            console.log(`🔧 Physics sync: truck=(${truckX.toFixed(2)}, ${truckZ.toFixed(2)}) rot=${(this.rotation * 180 / Math.PI).toFixed(1)}° root.rot.y=${(this.root.rotation.y * 180 / Math.PI).toFixed(1)}°`);
         }
         
         for (let i = 0; i < this.truckPhysicsAggregates.length; i++) {
