@@ -779,20 +779,20 @@ class ItemManager {
     
     updatePreview(x, z, rotation) {
         if (!this.previewMesh || !this.previewItemDef) return;
-        
+
         const boxSize = this.getItemBoxSize(this.previewItemDef);
         const clamped = this._clampWorldPointToCargo(x, z, boxSize, rotation);
         const y = this.findPlacementY(clamped.x, clamped.z, boxSize.y);
-        
+
         this.previewMesh.position = new BABYLON.Vector3(clamped.x, y, clamped.z);
         // Add truck rotation so preview orients with truck
         this.previewMesh.rotation.y = rotation + this.truck.rotation;
         this.updateHeldItemLabel(boxSize.y);
-        
+
         // Check validity and update color
         const isValid = this.isValidPlacement(this.previewMesh);
-        this.previewMesh.material.emissiveColor = isValid 
-            ? new BABYLON.Color3(0, 0.15, 0) 
+        this.previewMesh.material.emissiveColor = isValid
+            ? new BABYLON.Color3(0, 0.15, 0)
             : new BABYLON.Color3(0.3, 0, 0);
         if (this.previewModelMeshes) {
             const glow = isValid ? new BABYLON.Color3(0, 0.15, 0) : new BABYLON.Color3(0.3, 0, 0);
@@ -802,7 +802,23 @@ class ItemManager {
                 }
             });
         }
-        
+
+        // Update debug visualization if enabled
+        if (this.debugEnabled) {
+            this.updateDebugVisualization();
+
+            // Log placement coordinates for debugging
+            const local = this._worldToTruckLocalXZ(clamped.x, clamped.z);
+            console.log('🎯 Preview:',
+                `Input world=(${x.toFixed(2)}, ${z.toFixed(2)})`,
+                `Clamped world=(${clamped.x.toFixed(2)}, ${clamped.z.toFixed(2)})`,
+                `Local=(${local.x.toFixed(2)}, ${local.z.toFixed(2)})`,
+                `ItemRot=${(rotation * 180 / Math.PI).toFixed(1)}°`,
+                `TruckRot=${(this.truck.rotation * 180 / Math.PI).toFixed(1)}°`,
+                `Valid=${isValid}`
+            );
+        }
+
         return { x: clamped.x, y, z: clamped.z, isValid };
     }
 
@@ -1094,5 +1110,200 @@ class ItemManager {
         // Parent to box so they move together
         shaft.parent = boxMesh;
         head.parent = boxMesh;
+    }
+
+    // ========== DEBUG VISUALIZATION ==========
+
+    enableDebugVisualization() {
+        this.debugEnabled = true;
+        console.log('🔍 DEBUG: Placement area visualization ENABLED');
+        this.updateDebugVisualization();
+    }
+
+    disableDebugVisualization() {
+        this.debugEnabled = false;
+        this.cleanupDebugMeshes();
+        console.log('🔍 DEBUG: Placement area visualization DISABLED');
+    }
+
+    updateDebugVisualization() {
+        if (!this.debugEnabled) return;
+
+        const truck = this.truck;
+        const floorY = truck.getFloorTopY() + 0.02; // Slightly above floor
+        const cos = Math.cos(truck.rotation);
+        const sin = Math.sin(truck.rotation);
+        const px = truck.position.x;
+        const pz = truck.position.z;
+
+        // Cargo dimensions (the ACTUAL truck-local cargo area)
+        const halfW = truck.cargoWidth / 2;
+        const halfL = truck.cargoLength / 2;
+
+        // Calculate the 4 corners of the cargo area in WORLD coordinates
+        // These should form a rectangle that rotates WITH the truck
+        const corners = [
+            { lx: -halfW, lz: -halfL }, // Front-left
+            { lx:  halfW, lz: -halfL }, // Front-right
+            { lx:  halfW, lz:  halfL }, // Back-right
+            { lx: -halfW, lz:  halfL }, // Back-left
+        ];
+
+        const worldCorners = corners.map(c => {
+            return new BABYLON.Vector3(
+                px + c.lx * cos - c.lz * sin,
+                floorY,
+                pz + c.lx * sin + c.lz * cos
+            );
+        });
+
+        // Create/update GREEN lines showing the ACTUAL cargo area (truck-local)
+        if (!this.debugLines) this.debugLines = [];
+
+        // Dispose old lines
+        this.debugLines.forEach(line => line.dispose());
+        this.debugLines = [];
+
+        // Create lines for each edge (green = actual cargo area)
+        const greenMat = new BABYLON.StandardMaterial('debugGreenMat', this.scene);
+        greenMat.emissiveColor = new BABYLON.Color3(0, 1, 0);
+        greenMat.disableLighting = true;
+
+        for (let i = 0; i < 4; i++) {
+            const next = (i + 1) % 4;
+            const line = BABYLON.MeshBuilder.CreateLines(`debugCargoLine${i}`, {
+                points: [worldCorners[i], worldCorners[next]],
+                updatable: false
+            }, this.scene);
+            line.color = new BABYLON.Color3(0, 1, 0); // Green
+            this.debugLines.push(line);
+        }
+
+        // Also create a semi-transparent floor plane to show the cargo area
+        if (this.debugFloorPlane) {
+            this.debugFloorPlane.dispose();
+        }
+
+        // Create floor plane as a custom mesh from the 4 corners
+        this.debugFloorPlane = new BABYLON.Mesh('debugFloorPlane', this.scene);
+        const positions = [
+            worldCorners[0].x, floorY, worldCorners[0].z,
+            worldCorners[1].x, floorY, worldCorners[1].z,
+            worldCorners[2].x, floorY, worldCorners[2].z,
+            worldCorners[3].x, floorY, worldCorners[3].z,
+        ];
+        const indices = [0, 1, 2, 0, 2, 3];
+        const normals = [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0];
+
+        const vertexData = new BABYLON.VertexData();
+        vertexData.positions = positions;
+        vertexData.indices = indices;
+        vertexData.normals = normals;
+        vertexData.applyToMesh(this.debugFloorPlane);
+
+        const floorMat = new BABYLON.StandardMaterial('debugFloorMat', this.scene);
+        floorMat.diffuseColor = new BABYLON.Color3(0, 1, 0);
+        floorMat.emissiveColor = new BABYLON.Color3(0, 0.3, 0);
+        floorMat.alpha = 0.3;
+        floorMat.backFaceCulling = false;
+        this.debugFloorPlane.material = floorMat;
+
+        // Now show the AABB bounds (RED lines) - what cargoBounds currently calculates
+        const bounds = truck.getBounds();
+        if (bounds) {
+            if (!this.debugAABBLines) this.debugAABBLines = [];
+            this.debugAABBLines.forEach(line => line.dispose());
+            this.debugAABBLines = [];
+
+            const aabbCorners = [
+                new BABYLON.Vector3(bounds.minX, floorY + 0.05, bounds.minZ),
+                new BABYLON.Vector3(bounds.maxX, floorY + 0.05, bounds.minZ),
+                new BABYLON.Vector3(bounds.maxX, floorY + 0.05, bounds.maxZ),
+                new BABYLON.Vector3(bounds.minX, floorY + 0.05, bounds.maxZ),
+            ];
+
+            for (let i = 0; i < 4; i++) {
+                const next = (i + 1) % 4;
+                const line = BABYLON.MeshBuilder.CreateLines(`debugAABBLine${i}`, {
+                    points: [aabbCorners[i], aabbCorners[next]],
+                    updatable: false
+                }, this.scene);
+                line.color = new BABYLON.Color3(1, 0, 0); // Red
+                this.debugAABBLines.push(line);
+            }
+        }
+
+        // Log debug info
+        console.log('🔍 DEBUG Cargo Area:',
+            `Truck pos=(${px.toFixed(2)}, ${pz.toFixed(2)}) rot=${(truck.rotation * 180 / Math.PI).toFixed(1)}°`,
+            `CargoSize=${truck.cargoWidth}x${truck.cargoLength}`,
+            `AABB=(${bounds?.minX.toFixed(2)},${bounds?.minZ.toFixed(2)})-(${bounds?.maxX.toFixed(2)},${bounds?.maxZ.toFixed(2)})`
+        );
+
+        // Add corner markers (small spheres) for clarity
+        if (!this.debugCornerMarkers) this.debugCornerMarkers = [];
+        this.debugCornerMarkers.forEach(m => m.dispose());
+        this.debugCornerMarkers = [];
+
+        const markerMat = new BABYLON.StandardMaterial('debugMarkerMat', this.scene);
+        markerMat.emissiveColor = new BABYLON.Color3(1, 1, 0); // Yellow
+        markerMat.disableLighting = true;
+
+        worldCorners.forEach((corner, i) => {
+            const marker = BABYLON.MeshBuilder.CreateSphere(`debugCorner${i}`, { diameter: 0.2 }, this.scene);
+            marker.position = corner.clone();
+            marker.position.y = floorY + 0.1;
+            marker.material = markerMat;
+            this.debugCornerMarkers.push(marker);
+        });
+
+        // Add truck center marker (cyan)
+        if (this.debugTruckCenterMarker) this.debugTruckCenterMarker.dispose();
+        const centerMat = new BABYLON.StandardMaterial('debugCenterMat', this.scene);
+        centerMat.emissiveColor = new BABYLON.Color3(0, 1, 1); // Cyan
+        centerMat.disableLighting = true;
+        this.debugTruckCenterMarker = BABYLON.MeshBuilder.CreateSphere('debugTruckCenter', { diameter: 0.3 }, this.scene);
+        this.debugTruckCenterMarker.position = new BABYLON.Vector3(px, floorY + 0.15, pz);
+        this.debugTruckCenterMarker.material = centerMat;
+
+        // Add forward direction indicator (arrow pointing where truck faces)
+        if (this.debugForwardArrow) this.debugForwardArrow.dispose();
+        const forwardX = px - Math.sin(truck.rotation) * 2;  // Forward is -Z in local space
+        const forwardZ = pz - Math.cos(truck.rotation) * 2;
+        this.debugForwardArrow = BABYLON.MeshBuilder.CreateLines('debugForward', {
+            points: [
+                new BABYLON.Vector3(px, floorY + 0.2, pz),
+                new BABYLON.Vector3(forwardX, floorY + 0.2, forwardZ)
+            ]
+        }, this.scene);
+        this.debugForwardArrow.color = new BABYLON.Color3(0, 1, 1); // Cyan
+    }
+
+    // Clean up all debug meshes
+    cleanupDebugMeshes() {
+        if (this.debugLines) {
+            this.debugLines.forEach(line => line.dispose());
+            this.debugLines = [];
+        }
+        if (this.debugAABBLines) {
+            this.debugAABBLines.forEach(line => line.dispose());
+            this.debugAABBLines = [];
+        }
+        if (this.debugFloorPlane) {
+            this.debugFloorPlane.dispose();
+            this.debugFloorPlane = null;
+        }
+        if (this.debugCornerMarkers) {
+            this.debugCornerMarkers.forEach(m => m.dispose());
+            this.debugCornerMarkers = [];
+        }
+        if (this.debugTruckCenterMarker) {
+            this.debugTruckCenterMarker.dispose();
+            this.debugTruckCenterMarker = null;
+        }
+        if (this.debugForwardArrow) {
+            this.debugForwardArrow.dispose();
+            this.debugForwardArrow = null;
+        }
     }
 }

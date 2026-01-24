@@ -131,6 +131,15 @@ class Game {
                         this.perfOverlay.style.display = this.enablePerfStats ? 'block' : 'none';
                     }
                     console.log(`🧪 Toggle perf stats: ${this.enablePerfStats}`);
+                } else if (e.key === '8') {
+                    // Toggle placement area debug visualization
+                    if (this.itemManager) {
+                        if (this.itemManager.debugEnabled) {
+                            this.itemManager.disableDebugVisualization();
+                        } else {
+                            this.itemManager.enableDebugVisualization();
+                        }
+                    }
                 } else if (e.key === '9') {
                     // Toggle physics walls visibility for debugging
                     if (this.truck && this.truck.togglePhysicsWallsDebug) {
