@@ -352,25 +352,39 @@ class Game {
         // Check if arrived at destination
         this.checkDestinationArrival();
         
-        // Check for fallen items
-        const bounds = this.truck.getBounds();
+        // Check for fallen items using truck-local coordinates (not AABB bounds)
         const floorY = this.truck.getFloorTopY();
-        
+        const truckX = this.truck.position.x;
+        const truckZ = this.truck.position.z;
+        const truckRot = this.truck.rotation;
+        const cos = Math.cos(truckRot);
+        const sin = Math.sin(truckRot);
+        const halfW = this.truck.cargoWidth / 2;
+        const halfL = this.truck.cargoLength / 2;
+
         // Check each placed item for falling out
         let newlyFallen = 0;
         this.itemManager.placedItems.forEach(item => {
             if (!item.isFallen && item.mesh) {
                 const pos = item.mesh.position;
                 const itemHalfHeight = item.size ? item.size.y / 2 : 0.3;
-                
+
                 // Item bottom is below truck floor by more than 0.3m = fallen
                 const itemBottomY = pos.y - itemHalfHeight;
                 const fellBelowFloor = itemBottomY < floorY - 0.3;
-                
-                // Item is outside truck bounds horizontally (with small margin)
-                const outsideBounds = pos.x < bounds.minX - 0.5 || pos.x > bounds.maxX + 0.5 ||
-                                     pos.z < bounds.minZ - 0.5 || pos.z > bounds.maxZ + 1;
-                
+
+                // Transform item position to truck-local coordinates
+                const dx = pos.x - truckX;
+                const dz = pos.z - truckZ;
+                const localX = dx * cos + dz * sin;
+                const localZ = -dx * sin + dz * cos;
+
+                // Check if outside truck cargo area in local coordinates (with margin)
+                const outsideX = Math.abs(localX) > halfW + 0.5;
+                const outsideFront = localZ < -halfL - 0.5;
+                const outsideBack = localZ > halfL + 1.0; // More margin at open back
+                const outsideBounds = outsideX || outsideFront || outsideBack;
+
                 // Mark as fallen if below floor OR outside bounds
                 if (fellBelowFloor || outsideBounds) {
                     item.isFallen = true;

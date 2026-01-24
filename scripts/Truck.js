@@ -1710,12 +1710,43 @@ class Truck {
                 console.log(`✅ ${item.id} now DYNAMIC`);
             }
 
-            // Skip items that don't have physics yet OR are still KINEMATIC after physics creation
+            // Items without physics OR still KINEMATIC need to move with the truck
+            // to stay in their local cargo position
             if ((item.createPhysicsAt && item.createPhysicsAt > 0) || (item.becomeDynamicAt && item.becomeDynamicAt > 0)) {
-                // Log to verify we're skipping
+                // Log to verify we're in settling mode
                 if (!item._loggedSkip) {
-                    console.log(`⏳ SKIPPING ${item.id} - settling/kinematic`);
+                    console.log(`⏳ SETTLING ${item.id} - moving with truck`);
                     item._loggedSkip = true;
+                }
+
+                // Move item with truck by maintaining its local position
+                // This prevents items from being left behind when truck moves during settling
+                if (item.localX !== undefined && item.localZ !== undefined) {
+                    const newWorldX = this.position.x + item.localX * cos - item.localZ * sin;
+                    const newWorldZ = this.position.z + item.localX * sin + item.localZ * cos;
+                    item.mesh.position.x = newWorldX;
+                    item.mesh.position.z = newWorldZ;
+
+                    // Also update rotation using localQuat (stored in addLoadedItem)
+                    if (item.localQuat) {
+                        const truckQuat = BABYLON.Quaternion.RotationYawPitchRoll(this.rotation, 0, 0);
+                        const worldQuat = truckQuat.multiply(item.localQuat);
+                        if (!item.mesh.rotationQuaternion) {
+                            item.mesh.rotationQuaternion = worldQuat;
+                        } else {
+                            item.mesh.rotationQuaternion.copyFrom(worldQuat);
+                        }
+                    }
+
+                    // If body exists (kinematic phase), update its transform too
+                    if (body) {
+                        const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
+                        if (!this._settleTargetPos) {
+                            this._settleTargetPos = new BABYLON.Vector3();
+                        }
+                        this._settleTargetPos.set(newWorldX, item.mesh.position.y, newWorldZ);
+                        body.setTargetTransform(this._settleTargetPos, quat);
+                    }
                 }
                 continue;
             }
