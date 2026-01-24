@@ -1652,6 +1652,7 @@ class Truck {
             // Create physics for newly placed items after settling period
             if (!body && item.createPhysicsAt && itemsNowMs >= item.createPhysicsAt && item.mesh._pendingPhysics) {
                 const params = item.mesh._pendingPhysics;
+                console.log(`⚙️ CREATING PHYSICS for ${item.id} after 300ms settling. Position: (${item.mesh.position.x.toFixed(2)}, ${item.mesh.position.y.toFixed(2)}, ${item.mesh.position.z.toFixed(2)})`);
 
                 // NOW create the physics aggregate - item has been sitting still for 300ms
                 const aggregate = new BABYLON.PhysicsAggregate(
@@ -1697,6 +1698,11 @@ class Truck {
 
             // Skip items that don't have physics yet (still in settling period)
             if (item.createPhysicsAt && item.createPhysicsAt > 0) {
+                // Log to verify we're skipping
+                if (!item._loggedSkip) {
+                    console.log(`⏳ SKIPPING ${item.id} - no physics yet (settling)`);
+                    item._loggedSkip = true;
+                }
                 continue;
             }
 

@@ -926,6 +926,8 @@ class ItemManager {
             angularDamping: baseAngularDamping
         };
 
+        console.log(`📦 PLACED ITEM ${itemDef.id}: NO PHYSICS YET, will create in 300ms. Position: (${mesh.position.x.toFixed(2)}, ${mesh.position.y.toFixed(2)}, ${mesh.position.z.toFixed(2)})`);
+
         const nowMs = performance.now();
 
         // Track placed item (include volumeM3 which has packing factor applied)
