@@ -1563,13 +1563,14 @@ class Truck {
     addLoadedItem(item) {
         // Just track the item - physics handles everything now
         // Store initial local position for reference
-        const cos = Math.cos(this.rotation);
-        const sin = Math.sin(this.rotation);
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-this.rotation);
+        const sin = Math.sin(-this.rotation);
         const dx = item.mesh.position.x - this.position.x;
         const dz = item.mesh.position.z - this.position.z;
-        
-        item.localX = dx * cos + dz * sin;   // Correct world-to-local
-        item.localZ = -dx * sin + dz * cos;  // Correct world-to-local
+
+        item.localX = dx * cos + dz * sin;   // World-to-local
+        item.localZ = -dx * sin + dz * cos;  // World-to-local
         item.localY = item.mesh.position.y;
         
         const meshQuat = item.mesh.rotationQuaternion
@@ -1620,9 +1621,10 @@ class Truck {
         // Items are physics bodies that collide with the truck's animated walls/floor.
         // The key insight: DON'T fight the physics engine with manual velocity manipulation.
         // Instead, rely on high friction and aggressive velocity capping to keep items stable.
-        
-        const cos = Math.cos(this.rotation);
-        const sin = Math.sin(this.rotation);
+
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-this.rotation);
+        const sin = Math.sin(-this.rotation);
         
         const itemsNowMs = performance.now();
         const isTruckMoving = Math.abs(this.speed) > 0.5;
@@ -1977,9 +1979,10 @@ class Truck {
             this._enforceItemBoundsLogged = true;
             console.log('✅ enforceItemBounds is running (post-physics)');
         }
-        
-        const cos = Math.cos(this.rotation);
-        const sin = Math.sin(this.rotation);
+
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-this.rotation);
+        const sin = Math.sin(-this.rotation);
         
         // Wall positions (inner edge of cargo area)
         const wallInnerX = this.cargoWidth / 2;           // = 1.2m from center
@@ -2167,8 +2170,9 @@ class Truck {
     // Legacy method kept for compatibility - no longer needed with pure Havok physics
     updateLoadedItemsLegacy(dt, moveX, moveZ, rotationDelta) {
         const isMoving = Math.abs(this.speed) > 0.01 || this.keys.w || this.keys.s || this.keys.a || this.keys.d;
-        const cos = Math.cos(this.rotation);
-        const sin = Math.sin(this.rotation);
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-this.rotation);
+        const sin = Math.sin(-this.rotation);
         
         for (let i = 0; i < this.loadedItems.length; i++) {
             const item = this.loadedItems[i];
@@ -2238,9 +2242,10 @@ class Truck {
     syncPhysicsBodies() {
         // Update all truck physics bodies to follow the truck
         if (!this.truckPhysicsAggregates) return;
-        
-        const cos = Math.cos(this.rotation);
-        const sin = Math.sin(this.rotation);
+
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-this.rotation);
+        const sin = Math.sin(-this.rotation);
         const truckX = this.position.x;
         const truckZ = this.position.z;
         
@@ -2464,8 +2469,9 @@ class Truck {
     }
     
     updateCargoBounds() {
-        const cos = Math.cos(this.rotation);
-        const sin = Math.sin(this.rotation);
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-this.rotation);
+        const sin = Math.sin(-this.rotation);
         const px = this.position.x;
         const pz = this.position.z;
         

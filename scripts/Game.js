@@ -377,8 +377,9 @@ class Game {
         const truckX = this.truck.position.x;
         const truckZ = this.truck.position.z;
         const truckRot = this.truck.rotation;
-        const cos = Math.cos(truckRot);
-        const sin = Math.sin(truckRot);
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-truckRot);
+        const sin = Math.sin(-truckRot);
         const halfW = this.truck.cargoWidth / 2;
         const halfL = this.truck.cargoLength / 2;
 

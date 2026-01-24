@@ -83,8 +83,9 @@ class ItemManager {
     }
 
     _worldToTruckLocalXZ(worldX, worldZ) {
-        const cos = Math.cos(this.truck.rotation);
-        const sin = Math.sin(this.truck.rotation);
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-this.truck.rotation);
+        const sin = Math.sin(-this.truck.rotation);
         const dx = worldX - this.truck.position.x;
         const dz = worldZ - this.truck.position.z;
         return {
@@ -94,8 +95,9 @@ class ItemManager {
     }
 
     _truckLocalToWorldXZ(localX, localZ) {
-        const cos = Math.cos(this.truck.rotation);
-        const sin = Math.sin(this.truck.rotation);
+        // IMPORTANT: Negate rotation for Babylon.js convention
+        const cos = Math.cos(-this.truck.rotation);
+        const sin = Math.sin(-this.truck.rotation);
         return {
             x: this.truck.position.x + localX * cos - localZ * sin,
             z: this.truck.position.z + localX * sin + localZ * cos
