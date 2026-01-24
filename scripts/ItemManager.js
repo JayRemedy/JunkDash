@@ -1148,8 +1148,9 @@ class ItemManager {
             }
         }
 
-        const cos = Math.cos(truckRot);
-        const sin = Math.sin(truckRot);
+        // IMPORTANT: Negate rotation - Babylon's Y rotation is opposite to standard 2D rotation
+        const cos = Math.cos(-truckRot);
+        const sin = Math.sin(-truckRot);
 
         // Debug: log positions and rotation sources
         const hasQuat = truck.root && truck.root.rotationQuaternion;
