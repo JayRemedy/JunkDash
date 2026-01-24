@@ -1131,10 +1131,18 @@ class ItemManager {
 
         const truck = this.truck;
         const floorY = truck.getFloorTopY() + 0.02; // Slightly above floor
-        const cos = Math.cos(truck.rotation);
-        const sin = Math.sin(truck.rotation);
-        const px = truck.position.x;
-        const pz = truck.position.z;
+
+        // CRITICAL: Use the actual truck position from its mesh root, not the position property
+        // The position property might not be in sync with where the truck visually is
+        const px = truck.root ? truck.root.position.x : truck.position.x;
+        const pz = truck.root ? truck.root.position.z : truck.position.z;
+        const truckRot = truck.root ? truck.root.rotation.y : truck.rotation;
+
+        const cos = Math.cos(truckRot);
+        const sin = Math.sin(truckRot);
+
+        // Debug: log both positions to see if they differ
+        console.log(`🔍 DEBUG UPDATE: root.pos=(${px.toFixed(2)}, ${pz.toFixed(2)}) this.pos=(${truck.position.x.toFixed(2)}, ${truck.position.z.toFixed(2)}) rot=${(truckRot * 180 / Math.PI).toFixed(1)}°`);
 
         // Cargo dimensions (the ACTUAL truck-local cargo area)
         const halfW = truck.cargoWidth / 2;

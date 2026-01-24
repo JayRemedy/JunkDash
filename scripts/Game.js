@@ -138,7 +138,18 @@ class Game {
                             this.itemManager.disableDebugVisualization();
                         } else {
                             this.itemManager.enableDebugVisualization();
+                            // Start continuous update
+                            this._debugUpdateInterval = setInterval(() => {
+                                if (this.itemManager && this.itemManager.debugEnabled) {
+                                    this.itemManager.updateDebugVisualization();
+                                }
+                            }, 100); // Update 10 times per second
                         }
+                    }
+                    // Clear interval when disabling
+                    if (this.itemManager && !this.itemManager.debugEnabled && this._debugUpdateInterval) {
+                        clearInterval(this._debugUpdateInterval);
+                        this._debugUpdateInterval = null;
                     }
                 } else if (e.key === '9') {
                     // Toggle physics walls visibility for debugging
