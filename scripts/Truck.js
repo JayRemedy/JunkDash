@@ -1652,9 +1652,9 @@ class Truck {
             // Create physics for newly placed items after settling period
             if (!body && item.createPhysicsAt && itemsNowMs >= item.createPhysicsAt && item.mesh._pendingPhysics) {
                 const params = item.mesh._pendingPhysics;
-                console.log(`⚙️ CREATING PHYSICS for ${item.id} after 300ms settling. Position: (${item.mesh.position.x.toFixed(2)}, ${item.mesh.position.y.toFixed(2)}, ${item.mesh.position.z.toFixed(2)})`);
+                console.log(`⚙️ CREATING PHYSICS for ${item.id}. Position: (${item.mesh.position.x.toFixed(2)}, ${item.mesh.position.y.toFixed(2)}, ${item.mesh.position.z.toFixed(2)})`);
 
-                // NOW create the physics aggregate - item has been sitting still for 300ms
+                // Create physics - Havok will apply impulse during construction
                 const aggregate = new BABYLON.PhysicsAggregate(
                     item.mesh,
                     BABYLON.PhysicsShapeType.BOX,
@@ -1668,11 +1668,14 @@ class Truck {
                 item.mesh.physicsAggregate = aggregate;
 
                 if (aggregate.body) {
-                    // Zero velocities immediately
+                    // IMMEDIATELY set to KINEMATIC to cancel any impulse from construction
+                    aggregate.body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
+
+                    // Zero velocities to cancel the impulse
                     aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
                     aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
 
-                    // Apply high damping temporarily
+                    // Apply high damping for when it becomes dynamic
                     aggregate.body.setLinearDamping(15.0);
                     aggregate.body.setAngularDamping(20.0);
 
@@ -1683,24 +1686,35 @@ class Truck {
                     }
                 }
 
-                // Clear pending physics flag
+                // Clear pending physics flag, set time to become DYNAMIC
                 item.mesh._pendingPhysics = null;
                 item.createPhysicsAt = 0;
+                item.becomeDynamicAt = itemsNowMs + 100; // Become dynamic after 100ms
 
                 // Reset damping after a delay
                 item.dampingBoostUntil = itemsNowMs + 500;
                 item._dampingBoosted = true;
                 item.lockLateralUntil = itemsNowMs + 300;
 
-                // Re-get body reference for rest of loop
-                continue; // Skip to next iteration, physics just created
+                continue;
             }
 
-            // Skip items that don't have physics yet (still in settling period)
-            if (item.createPhysicsAt && item.createPhysicsAt > 0) {
+            // Transition from KINEMATIC to DYNAMIC after physics creation
+            if (body && item.becomeDynamicAt && itemsNowMs >= item.becomeDynamicAt) {
+                // Zero velocities again just to be safe
+                body.setLinearVelocity(BABYLON.Vector3.Zero());
+                body.setAngularVelocity(BABYLON.Vector3.Zero());
+                // Now enable physics
+                body.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
+                item.becomeDynamicAt = 0;
+                console.log(`✅ ${item.id} now DYNAMIC`);
+            }
+
+            // Skip items that don't have physics yet OR are still KINEMATIC after physics creation
+            if ((item.createPhysicsAt && item.createPhysicsAt > 0) || (item.becomeDynamicAt && item.becomeDynamicAt > 0)) {
                 // Log to verify we're skipping
                 if (!item._loggedSkip) {
-                    console.log(`⏳ SKIPPING ${item.id} - no physics yet (settling)`);
+                    console.log(`⏳ SKIPPING ${item.id} - settling/kinematic`);
                     item._loggedSkip = true;
                 }
                 continue;
