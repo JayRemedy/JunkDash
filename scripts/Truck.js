@@ -1649,50 +1649,55 @@ class Truck {
             // Restore items that were temporarily made KINEMATIC for teleportation
             this.restoreItemMotionType(item, body, itemsNowMs);
 
-            // Transition newly placed items from STATIC to DYNAMIC after settling
-            if (body && item.becomesDynamicAt && itemsNowMs >= item.becomesDynamicAt) {
-                // Get the intended mass from the mesh
-                const intendedMass = item.mesh._intendedMass || 10;
+            // Create physics for newly placed items after settling period
+            if (!body && item.createPhysicsAt && itemsNowMs >= item.createPhysicsAt && item.mesh._pendingPhysics) {
+                const params = item.mesh._pendingPhysics;
 
-                // Set mass properties to make it a DYNAMIC body
-                // This converts from STATIC (mass=0) to DYNAMIC (mass>0)
-                if (body.setMassProperties) {
-                    body.setMassProperties({
-                        mass: intendedMass,
-                        centerOfMass: BABYLON.Vector3.Zero(),
-                        inertia: new BABYLON.Vector3(intendedMass, intendedMass, intendedMass)
-                    });
+                // NOW create the physics aggregate - item has been sitting still for 300ms
+                const aggregate = new BABYLON.PhysicsAggregate(
+                    item.mesh,
+                    BABYLON.PhysicsShapeType.BOX,
+                    {
+                        mass: params.mass,
+                        restitution: params.restitution,
+                        friction: params.friction
+                    },
+                    this.scene
+                );
+                item.mesh.physicsAggregate = aggregate;
+
+                if (aggregate.body) {
+                    // Zero velocities immediately
+                    aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
+                    aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+
+                    // Apply high damping temporarily
+                    aggregate.body.setLinearDamping(15.0);
+                    aggregate.body.setAngularDamping(20.0);
+
+                    // Set collision filters
+                    if (aggregate.body.setCollisionFilterMembership) {
+                        aggregate.body.setCollisionFilterMembership(1);
+                        aggregate.body.setCollisionFilterCollideMask(1 | 2);
+                    }
                 }
 
-                // Clear velocities to ensure clean start
-                body.setLinearVelocity(BABYLON.Vector3.Zero());
-                body.setAngularVelocity(BABYLON.Vector3.Zero());
+                // Clear pending physics flag
+                item.mesh._pendingPhysics = null;
+                item.createPhysicsAt = 0;
 
-                // Apply high damping temporarily for smooth transition
-                body.setLinearDamping(15.0);
-                body.setAngularDamping(20.0);
-
-                // Set collision filters
-                if (body.setCollisionFilterMembership) {
-                    body.setCollisionFilterMembership(1);  // Items group
-                    body.setCollisionFilterCollideMask(1 | 2);  // Collide with items and truck
-                }
-
-                // Now set to DYNAMIC motion type
-                body.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
-
-                item.becomesDynamicAt = 0; // Only do this once
                 // Reset damping after a delay
                 item.dampingBoostUntil = itemsNowMs + 500;
                 item._dampingBoosted = true;
-                // Also lock lateral movement briefly
                 item.lockLateralUntil = itemsNowMs + 300;
+
+                // Re-get body reference for rest of loop
+                continue; // Skip to next iteration, physics just created
             }
 
-            // Skip all physics processing for items still settling (KINEMATIC mode)
-            // They don't need velocity capping or position clamping
-            if (item.becomesDynamicAt && item.becomesDynamicAt > 0) {
-                continue; // Skip to next item
+            // Skip items that don't have physics yet (still in settling period)
+            if (item.createPhysicsAt && item.createPhysicsAt > 0) {
+                continue;
             }
 
             // Calculate local position
@@ -1951,9 +1956,8 @@ class Truck {
             const item = this.loadedItems[i];
             if (!item.mesh || item.isFallen) continue;
 
-            // Skip items that are still settling (KINEMATIC mode)
-            // They don't need velocity capping or bounds checking
-            if (item.becomesDynamicAt && item.becomesDynamicAt > 0) {
+            // Skip items that don't have physics yet (still settling)
+            if (item.createPhysicsAt && item.createPhysicsAt > 0) {
                 continue;
             }
 

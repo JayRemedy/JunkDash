@@ -909,50 +909,27 @@ class ItemManager {
         mesh.isPickable = true; // So other items can stack on it
         this.sceneManager.addShadowCaster(mesh);
         
-        // Add physics using Havok PhysicsAggregate
-        // CRITICAL: Use mass=0 to create a STATIC body that won't respond to collision impulses
-        // during the constructor. We'll add mass later when settling is complete.
+        // CRITICAL: Do NOT create physics yet!
+        // Havok applies collision impulses during PhysicsAggregate construction.
+        // We'll create physics later after the settling period.
         const scaledMass = Math.max(3, itemDef.weight * 2.5);
-        const aggregate = new BABYLON.PhysicsAggregate(
-            mesh,
-            BABYLON.PhysicsShapeType.BOX,
-            {
-                mass: 0,  // STATIC - no collision response during creation
-                restitution: 0.01,
-                friction: 10.0
-            },
-            this.scene
-        );
-
-        // Store the intended mass for later
-        mesh._intendedMass = scaledMass;
-        mesh.physicsAggregate = aggregate;
-
-        // Configure CCD (for later when collisions are re-enabled)
-        this.applyCcdSettings(aggregate.body, boxSize);
-
-        // Use larger collision margin to create a "buffer zone" around items
-        if (aggregate.shape && aggregate.shape.setMargin) {
-            const margin = Math.min(0.08, Math.min(boxSize.x, boxSize.y, boxSize.z) * 0.1);
-            aggregate.shape.setMargin(margin);
-        }
-        
-        // HIGH damping prevents items from accelerating too fast during physics collisions
         const baseLinearDamping = 3.0;
         const baseAngularDamping = 8.0;
 
-        // Configure damping (body is already KINEMATIC from aggregate creation)
-        if (aggregate.body) {
-            aggregate.body.setLinearDamping(baseLinearDamping);
-            aggregate.body.setAngularDamping(baseAngularDamping);
-            aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
-            aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
-        }
+        // Store physics parameters on mesh for later creation
+        mesh._pendingPhysics = {
+            mass: scaledMass,
+            restitution: 0.01,
+            friction: 10.0,
+            boxSize: boxSize,
+            linearDamping: baseLinearDamping,
+            angularDamping: baseAngularDamping
+        };
 
         const nowMs = performance.now();
 
         // Track placed item (include volumeM3 which has packing factor applied)
-        // Use longer settling time (300ms) to ensure no physics issues during placement
+        // Physics will be created after settling period (300ms)
         const placedItem = {
             id: itemDef.id,
             mesh: mesh,
@@ -961,8 +938,8 @@ class ItemManager {
             volumeM3: itemDef.volumeM3,
             isPlaced: true,
             isFallen: false,
-            // Time when item becomes DYNAMIC (physics-enabled) - 300ms settling period
-            becomesDynamicAt: nowMs + 300,
+            // Time when physics should be created
+            createPhysicsAt: nowMs + 300,
             lockLateralUntil: nowMs + 800,
             dampingBoostUntil: nowMs + 800,
             baseLinearDamping,
