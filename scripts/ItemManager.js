@@ -1148,50 +1148,42 @@ class ItemManager {
         const truck = this.truck;
         const floorY = truck.getFloorTopY() + 0.02; // Slightly above floor
 
-        // CRITICAL: Use the actual truck position from its mesh root
-        const px = truck.root ? truck.root.position.x : truck.position.x;
-        const pz = truck.root ? truck.root.position.z : truck.position.z;
-
-        // CRITICAL: Get rotation correctly - check rotationQuaternion first (overrides rotation.y in Babylon)
-        let truckRot = truck.rotation; // Default to the truck's logical rotation
-        if (truck.root) {
-            if (truck.root.rotationQuaternion) {
-                // Extract Y rotation from quaternion
-                const quat = truck.root.rotationQuaternion;
-                truckRot = Math.atan2(2 * (quat.w * quat.y + quat.x * quat.z), 1 - 2 * (quat.y * quat.y + quat.z * quat.z));
-            } else {
-                truckRot = truck.root.rotation.y;
-            }
-        }
-
-        // IMPORTANT: Negate rotation - Babylon's Y rotation is opposite to standard 2D rotation
-        const cos = Math.cos(-truckRot);
-        const sin = Math.sin(-truckRot);
-
-        // Debug: log positions and rotation sources
-        const hasQuat = truck.root && truck.root.rotationQuaternion;
-        console.log(`🔍 DEBUG: pos=(${px.toFixed(2)}, ${pz.toFixed(2)}) rot=${(truckRot * 180 / Math.PI).toFixed(1)}° (from ${hasQuat ? 'quaternion' : 'rotation.y'}) truck.rotation=${(truck.rotation * 180 / Math.PI).toFixed(1)}°`);
+        // Use Babylon's world matrix for accurate transformations
+        const worldMatrix = truck.root ? truck.root.getWorldMatrix() : null;
 
         // Cargo dimensions (the ACTUAL truck-local cargo area)
         const halfW = truck.cargoWidth / 2;
         const halfL = truck.cargoLength / 2;
 
         // Calculate the 4 corners of the cargo area in WORLD coordinates
-        // These should form a rectangle that rotates WITH the truck
-        const corners = [
-            { lx: -halfW, lz: -halfL }, // Front-left
-            { lx:  halfW, lz: -halfL }, // Front-right
-            { lx:  halfW, lz:  halfL }, // Back-right
-            { lx: -halfW, lz:  halfL }, // Back-left
+        // Use Babylon's TransformCoordinates for accurate transformation
+        const localCorners = [
+            new BABYLON.Vector3(-halfW, floorY, -halfL), // Front-left
+            new BABYLON.Vector3( halfW, floorY, -halfL), // Front-right
+            new BABYLON.Vector3( halfW, floorY,  halfL), // Back-right
+            new BABYLON.Vector3(-halfW, floorY,  halfL), // Back-left
         ];
 
-        const worldCorners = corners.map(c => {
-            return new BABYLON.Vector3(
-                px + c.lx * cos - c.lz * sin,
-                floorY,
-                pz + c.lx * sin + c.lz * cos
-            );
-        });
+        let worldCorners;
+        if (worldMatrix) {
+            worldCorners = localCorners.map(lc => {
+                const worldVec = BABYLON.Vector3.TransformCoordinates(lc, worldMatrix);
+                return new BABYLON.Vector3(worldVec.x, floorY, worldVec.z);
+            });
+        } else {
+            // Fallback to manual calculation
+            const px = truck.position.x;
+            const pz = truck.position.z;
+            const cos = Math.cos(-truck.rotation);
+            const sin = Math.sin(-truck.rotation);
+            worldCorners = localCorners.map(lc => {
+                return new BABYLON.Vector3(
+                    px + lc.x * cos - lc.z * sin,
+                    floorY,
+                    pz + lc.x * sin + lc.z * cos
+                );
+            });
+        }
 
         // Create/update GREEN lines showing the ACTUAL cargo area (truck-local)
         if (!this.debugLines) this.debugLines = [];
