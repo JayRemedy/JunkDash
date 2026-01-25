@@ -18,8 +18,8 @@
     <!-- Havok Physics (better performance and collision detection) -->
     <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
     
-    <!-- Styles -->
-    <link rel="stylesheet" href="./styles/main.css?v=2025-03-12">
+    <!-- Styles - timestamp cache busting -->
+    <script>document.write('<link rel="stylesheet" href="./styles/main.css?v=' + Date.now() + '">');</script>
 </head>
 <body>
     <!-- Loading Screen -->
@@ -223,18 +223,18 @@
         </div>
     </div>
 
-    <!-- Game Scripts -->
-    <script src="./scripts/Coords.js?v=2025-03-12"></script>
-    <script src="./scripts/AudioManager.js?v=2025-03-12"></script>
-    <script src="./scripts/SceneManager.js?v=2025-03-12"></script>
-    <script src="./scripts/PhysicsSystem.js?v=2025-03-12"></script>
-    <script src="./scripts/Truck.js?v=2025-03-12"></script>
-    <script src="./scripts/ItemManager.js?v=2025-03-12"></script>
-    <script src="./scripts/InputSystem.js?v=2025-03-12"></script>
-    <script src="./scripts/UIManager.js?v=2025-03-12"></script>
-    <script src="./scripts/LevelManager.js?v=2025-03-12"></script>
-    <script src="./scripts/HighScoreManager.js?v=2025-03-12"></script>
-    <script src="./scripts/Game.js?v=2025-03-12"></script>
-    <script src="./scripts/main.js?v=2025-03-12"></script>
+    <!-- Game Scripts - loaded dynamically with timestamp cache busting -->
+    <script>
+        // Cache busting: use current timestamp to force reload on every page load during development
+        const v = Date.now();
+        const scripts = [
+            'Coords', 'AudioManager', 'SceneManager', 'PhysicsSystem',
+            'Truck', 'ItemManager', 'InputSystem', 'UIManager',
+            'LevelManager', 'HighScoreManager', 'Game', 'main'
+        ];
+        scripts.forEach(name => {
+            document.write(`<script src="./scripts/${name}.js?v=${v}"><\/script>`);
+        });
+    </script>
 </body>
 </html>

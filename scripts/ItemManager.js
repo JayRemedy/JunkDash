@@ -134,7 +134,7 @@ class ItemManager {
         const local = this._worldToTruckLocalXZ(worldX, worldZ);
         const { halfX, halfZ } = this._getHalfExtentsXZForRotation(boxSize, yawRel);
 
-        const wallMargin = 0.10;
+        const wallMargin = 0.20; // Increased margin from walls to prevent physics collision
         const itemMargin = Math.min(0.08, Math.min(boxSize.x, boxSize.y, boxSize.z) * 0.1);
         const safety = wallMargin + itemMargin + 0.02;
 
@@ -927,9 +927,9 @@ class ItemManager {
         mat.roughness = 0.8;
         mesh.material = mat;
         
-        // Place at preview position with tiny lift to prevent spawning inside floor
-        // This prevents physics from pushing the item due to floor collision
-        mesh.position = new BABYLON.Vector3(placeX, placeY + 0.005, placeZ);
+        // Place at preview position with lift to prevent spawning inside floor
+        // Larger lift (2cm) prevents physics collision impulses from floor
+        mesh.position = new BABYLON.Vector3(placeX, placeY + 0.02, placeZ);
         
         // Attach 3D model if available
         this.attachModelIfAvailable(mesh, itemDef, { boxSize });
@@ -1032,7 +1032,7 @@ class ItemManager {
         const { halfX, halfZ } = this._getHalfExtentsXZForRotation(boxSize, yawRel);
         const local = this._worldToTruckLocalXZ(pos.x, pos.z);
 
-        const wallMargin = 0.10;
+        const wallMargin = 0.20; // Increased margin from walls to prevent physics collision
         const itemMargin = Math.min(0.08, Math.min(boxSize.x, boxSize.y, boxSize.z) * 0.1);
         const safety = wallMargin + itemMargin + 0.02;
 
@@ -1132,11 +1132,13 @@ class ItemManager {
     }
 
     // ========== DEBUG VISUALIZATION ==========
+    // Uses PARENTING to truck.root - meshes automatically follow truck transforms
+    // This is the same proven pattern used by all truck visual meshes (cab, cargo, wheels)
 
     enableDebugVisualization() {
         this.debugEnabled = true;
+        this._createDebugMeshes();
         console.log('🔍 DEBUG: Placement area visualization ENABLED');
-        this.updateDebugVisualization();
     }
 
     disableDebugVisualization() {
@@ -1146,70 +1148,101 @@ class ItemManager {
     }
 
     updateDebugVisualization() {
-        if (!this.debugEnabled) return;
+        // No-op - meshes are parented to truck.root and move automatically
+        // This function exists for API compatibility
+    }
 
+    _createDebugMeshes() {
         const truck = this.truck;
-
-        // If debug floor already exists and is parented to truck, nothing to do
-        if (this.debugFloorPlane && this.debugFloorPlane.parent === truck.root) {
+        if (!truck || !truck.root) {
+            console.error('🔍 DEBUG: Cannot create debug meshes - truck or truck.root not available');
             return;
         }
 
-        // Clean up any existing debug meshes
+        // Clean up any existing debug meshes first
         this.cleanupDebugMeshes();
 
-        // Cargo dimensions
         const halfW = truck.cargoWidth / 2;
         const halfL = truck.cargoLength / 2;
-        const localFloorY = truck.cargoFloorHeight + 0.02; // Local Y relative to truck root
+        const floorY = truck.cargoFloorHeight + 0.05; // Slightly above cargo floor
 
-        // Create floor plane in LOCAL coordinates, then parent to truck
-        // This way it automatically moves and rotates with the truck
+        // === GREEN FLOOR PLANE ===
+        // Shows the cargo area - parented to truck.root so it moves automatically
         this.debugFloorPlane = BABYLON.MeshBuilder.CreateGround('debugFloorPlane', {
             width: truck.cargoWidth,
             height: truck.cargoLength
         }, this.scene);
 
-        // Position in truck-local space (centered on cargo area)
-        this.debugFloorPlane.position.y = localFloorY;
-        this.debugFloorPlane.position.x = 0; // Centered
-        this.debugFloorPlane.position.z = 0; // Centered
-
-        // Parent to truck root - now it moves automatically!
-        this.debugFloorPlane.parent = truck.root;
-
         const floorMat = new BABYLON.StandardMaterial('debugFloorMat', this.scene);
         floorMat.diffuseColor = new BABYLON.Color3(0, 1, 0);
         floorMat.emissiveColor = new BABYLON.Color3(0, 0.5, 0);
-        floorMat.alpha = 0.4;
+        floorMat.alpha = 0.5;
         floorMat.backFaceCulling = false;
         this.debugFloorPlane.material = floorMat;
+        this.debugFloorPlane.isPickable = false;
 
-        // Create corner markers as children of the debug floor
-        if (!this.debugCornerMarkers) this.debugCornerMarkers = [];
+        // Position in LOCAL coordinates (relative to truck.root)
+        this.debugFloorPlane.position.set(0, floorY, 0);
+        this.debugFloorPlane.parent = truck.root; // PARENT to truck - this makes it move!
+
+        // === YELLOW CORNER MARKERS ===
+        this.debugCornerMarkers = [];
         const markerMat = new BABYLON.StandardMaterial('debugMarkerMat', this.scene);
         markerMat.emissiveColor = new BABYLON.Color3(1, 1, 0);
 
         const corners = [
-            { x: -halfW, z: -halfL },
-            { x:  halfW, z: -halfL },
-            { x:  halfW, z:  halfL },
-            { x: -halfW, z:  halfL },
+            { x: -halfW, z: -halfL, name: 'FL' }, // Front-Left
+            { x:  halfW, z: -halfL, name: 'FR' }, // Front-Right
+            { x:  halfW, z:  halfL, name: 'BL' }, // Back-Left
+            { x: -halfW, z:  halfL, name: 'BR' }, // Back-Right
         ];
 
         for (const c of corners) {
-            const marker = BABYLON.MeshBuilder.CreateSphere('debugMarker', { diameter: 0.15 }, this.scene);
-            marker.position.set(c.x, localFloorY + 0.1, c.z);
+            const marker = BABYLON.MeshBuilder.CreateSphere(`debugMarker_${c.name}`, { diameter: 0.2 }, this.scene);
             marker.material = markerMat;
-            marker.parent = truck.root;
+            marker.isPickable = false;
+            marker.position.set(c.x, floorY + 0.15, c.z); // LOCAL position
+            marker.parent = truck.root; // PARENT to truck
             this.debugCornerMarkers.push(marker);
         }
 
-        console.log('🔍 DEBUG: Created cargo area visualization (parented to truck)');
+        // === RED CENTER MARKER ===
+        const centerMat = new BABYLON.StandardMaterial('debugCenterMat', this.scene);
+        centerMat.emissiveColor = new BABYLON.Color3(1, 0, 0);
+        this.debugTruckCenterMarker = BABYLON.MeshBuilder.CreateSphere('debugCenter', { diameter: 0.3 }, this.scene);
+        this.debugTruckCenterMarker.material = centerMat;
+        this.debugTruckCenterMarker.isPickable = false;
+        this.debugTruckCenterMarker.position.set(0, floorY + 0.3, 0); // LOCAL position at truck origin
+        this.debugTruckCenterMarker.parent = truck.root; // PARENT to truck
+
+        // === BLUE FORWARD ARROW ===
+        // Points toward the cab (local -Z direction)
+        const arrowMat = new BABYLON.StandardMaterial('debugArrowMat', this.scene);
+        arrowMat.emissiveColor = new BABYLON.Color3(0, 0.5, 1);
+        this.debugForwardArrow = BABYLON.MeshBuilder.CreateBox('debugArrow', {
+            width: 0.15,
+            height: 0.15,
+            depth: 2.5
+        }, this.scene);
+        this.debugForwardArrow.material = arrowMat;
+        this.debugForwardArrow.isPickable = false;
+        // Position arrow extending from center toward front (local -Z)
+        this.debugForwardArrow.position.set(0, floorY + 0.3, -halfL - 0.5); // LOCAL position
+        this.debugForwardArrow.parent = truck.root; // PARENT to truck
+
+        console.log('🔍 DEBUG: Created debug meshes parented to truck.root');
+        console.log('🔍 DEBUG: truck.root.position:', truck.root.position.toString());
+        console.log('🔍 DEBUG: truck.root.rotation.y:', truck.root.rotation.y);
     }
 
     // Clean up all debug meshes
     cleanupDebugMeshes() {
+        // Remove old observer if it exists (legacy cleanup)
+        if (this._debugUpdateObserver) {
+            this.scene.onBeforeRenderObservable.remove(this._debugUpdateObserver);
+            this._debugUpdateObserver = null;
+        }
+
         if (this.debugLines) {
             this.debugLines.forEach(line => line.dispose());
             this.debugLines = [];
@@ -1219,18 +1252,24 @@ class ItemManager {
             this.debugAABBLines = [];
         }
         if (this.debugFloorPlane) {
+            this.debugFloorPlane.parent = null; // Unparent before dispose
             this.debugFloorPlane.dispose();
             this.debugFloorPlane = null;
         }
         if (this.debugCornerMarkers) {
-            this.debugCornerMarkers.forEach(m => m.dispose());
+            this.debugCornerMarkers.forEach(m => {
+                m.parent = null;
+                m.dispose();
+            });
             this.debugCornerMarkers = [];
         }
         if (this.debugTruckCenterMarker) {
+            this.debugTruckCenterMarker.parent = null;
             this.debugTruckCenterMarker.dispose();
             this.debugTruckCenterMarker = null;
         }
         if (this.debugForwardArrow) {
+            this.debugForwardArrow.parent = null;
             this.debugForwardArrow.dispose();
             this.debugForwardArrow = null;
         }

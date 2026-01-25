@@ -1666,9 +1666,44 @@ class Truck {
             // Create physics for newly placed items after settling period
             if (!body && item.createPhysicsAt && itemsNowMs >= item.createPhysicsAt && item.mesh._pendingPhysics) {
                 const params = item.mesh._pendingPhysics;
-                console.log(`⚙️ CREATING PHYSICS for ${item.id}. Position: (${item.mesh.position.x.toFixed(2)}, ${item.mesh.position.y.toFixed(2)}, ${item.mesh.position.z.toFixed(2)})`);
 
-                // Create physics - Havok will apply impulse during construction
+                // SAFETY: Ensure item is within bounds before creating physics
+                // This prevents collision impulses from walls
+                const itemLocalVec = BABYLON.Vector3.TransformCoordinates(
+                    new BABYLON.Vector3(item.mesh.position.x, item.mesh.position.y, item.mesh.position.z),
+                    invMatrix
+                );
+                const halfX = item.size ? item.size.x / 2 : 0.3;
+                const halfZ = item.size ? item.size.z / 2 : 0.3;
+                const margin = 0.15; // Safety margin from walls
+
+                const maxX = this.cargoWidth / 2 - halfX - margin;
+                const minZ = -this.cargoLength / 2 + halfZ + margin;
+
+                let needsAdjust = false;
+                let safeLocalX = itemLocalVec.x;
+                let safeLocalZ = itemLocalVec.z;
+
+                if (safeLocalX < -maxX) { safeLocalX = -maxX; needsAdjust = true; }
+                if (safeLocalX > maxX) { safeLocalX = maxX; needsAdjust = true; }
+                if (safeLocalZ < minZ) { safeLocalZ = minZ; needsAdjust = true; }
+
+                if (needsAdjust) {
+                    // Move item to safe position before creating physics
+                    const safeWorldVec = BABYLON.Vector3.TransformCoordinates(
+                        new BABYLON.Vector3(safeLocalX, itemLocalVec.y, safeLocalZ),
+                        worldMatrix
+                    );
+                    item.mesh.position.x = safeWorldVec.x;
+                    item.mesh.position.z = safeWorldVec.z;
+                    item.localX = safeLocalX;
+                    item.localZ = safeLocalZ;
+                    console.log(`⚠️ ADJUSTED ${item.id} position before physics creation`);
+                }
+
+                console.log(`⚙️ CREATING PHYSICS for ${item.id}. LocalPos: (${safeLocalX.toFixed(2)}, ${safeLocalZ.toFixed(2)})`);
+
+                // Create physics aggregate
                 const aggregate = new BABYLON.PhysicsAggregate(
                     item.mesh,
                     BABYLON.PhysicsShapeType.BOX,
@@ -1682,16 +1717,16 @@ class Truck {
                 item.mesh.physicsAggregate = aggregate;
 
                 if (aggregate.body) {
-                    // IMMEDIATELY set to KINEMATIC to cancel any impulse from construction
+                    // IMMEDIATELY set to KINEMATIC to prevent any physics response
                     aggregate.body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
 
-                    // Zero velocities to cancel the impulse
+                    // Zero velocities
                     aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
                     aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
 
-                    // Apply high damping for when it becomes dynamic
-                    aggregate.body.setLinearDamping(15.0);
-                    aggregate.body.setAngularDamping(20.0);
+                    // Apply very high damping
+                    aggregate.body.setLinearDamping(30.0);
+                    aggregate.body.setAngularDamping(40.0);
 
                     // Set collision filters
                     if (aggregate.body.setCollisionFilterMembership) {
@@ -1703,25 +1738,73 @@ class Truck {
                 // Clear pending physics flag, set time to become DYNAMIC
                 item.mesh._pendingPhysics = null;
                 item.createPhysicsAt = 0;
-                item.becomeDynamicAt = itemsNowMs + 100; // Become dynamic after 100ms
+                item.becomeDynamicAt = itemsNowMs + 200; // Longer KINEMATIC period (200ms)
 
-                // Reset damping after a delay
-                item.dampingBoostUntil = itemsNowMs + 500;
+                // Extended damping boost period
+                item.dampingBoostUntil = itemsNowMs + 1000;
                 item._dampingBoosted = true;
-                item.lockLateralUntil = itemsNowMs + 300;
+                item.lockLateralUntil = itemsNowMs + 500;
 
                 continue;
             }
 
             // Transition from KINEMATIC to DYNAMIC after physics creation
             if (body && item.becomeDynamicAt && itemsNowMs >= item.becomeDynamicAt) {
-                // Zero velocities again just to be safe
+                // Zero ALL velocities before transition
                 body.setLinearVelocity(BABYLON.Vector3.Zero());
                 body.setAngularVelocity(BABYLON.Vector3.Zero());
-                // Now enable physics
+
+                // Transition to DYNAMIC
                 body.setMotionType(BABYLON.PhysicsMotionType.DYNAMIC);
+
+                // IMMEDIATELY zero velocities again - Havok may have applied impulse
+                body.setLinearVelocity(BABYLON.Vector3.Zero());
+                body.setAngularVelocity(BABYLON.Vector3.Zero());
+
+                // Maximum damping during transition period
+                body.setLinearDamping(50.0);
+                body.setAngularDamping(60.0);
+
+                // Extended velocity guard period
+                item._justBecameDynamic = true;
+                item._dynamicFrame = 0;
+                item._lastVelCheck = itemsNowMs;
                 item.becomeDynamicAt = 0;
-                console.log(`✅ ${item.id} now DYNAMIC`);
+                console.log(`✅ ${item.id} now DYNAMIC (velocity guard active)`);
+            }
+
+            // Aggressive velocity clamping for items that just became dynamic
+            if (body && item._justBecameDynamic) {
+                item._dynamicFrame = (item._dynamicFrame || 0) + 1;
+
+                const vel = body.getLinearVelocity();
+                const angVel = body.getAngularVelocity();
+
+                if (vel) {
+                    const horizontalSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+                    const totalSpeed = Math.sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
+
+                    // For the first 30 frames (~0.5s at 60fps), be VERY aggressive
+                    if (item._dynamicFrame <= 30) {
+                        // Allow only gentle falling, zero everything else
+                        const allowedY = Math.max(vel.y, -2.0); // Max 2 m/s downward
+                        body.setLinearVelocity(new BABYLON.Vector3(0, allowedY, 0));
+                        body.setAngularVelocity(BABYLON.Vector3.Zero());
+                    } else if (horizontalSpeed > 1.0) {
+                        // After initial period, still clamp if moving too fast
+                        const scale = 1.0 / horizontalSpeed;
+                        body.setLinearVelocity(new BABYLON.Vector3(vel.x * scale, vel.y, vel.z * scale));
+                    }
+
+                    // Exit guard after 60 frames (~1 second)
+                    if (item._dynamicFrame > 60) {
+                        item._justBecameDynamic = false;
+                        // Restore moderate damping (still higher than normal)
+                        body.setLinearDamping(item.baseLinearDamping || 5.0);
+                        body.setAngularDamping(item.baseAngularDamping || 10.0);
+                        console.log(`✅ ${item.id} velocity guard complete`);
+                    }
+                }
             }
 
             // Items without physics OR still KINEMATIC need to move with the truck

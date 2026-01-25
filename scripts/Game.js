@@ -133,23 +133,15 @@ class Game {
                     console.log(`🧪 Toggle perf stats: ${this.enablePerfStats}`);
                 } else if (e.key === '8') {
                     // Toggle placement area debug visualization
+                    console.log('🔍 Key 8 pressed, itemManager:', !!this.itemManager);
                     if (this.itemManager) {
+                        console.log('🔍 debugEnabled before toggle:', this.itemManager.debugEnabled);
                         if (this.itemManager.debugEnabled) {
                             this.itemManager.disableDebugVisualization();
                         } else {
                             this.itemManager.enableDebugVisualization();
-                            // Start continuous update
-                            this._debugUpdateInterval = setInterval(() => {
-                                if (this.itemManager && this.itemManager.debugEnabled) {
-                                    this.itemManager.updateDebugVisualization();
-                                }
-                            }, 100); // Update 10 times per second
                         }
-                    }
-                    // Clear interval when disabling
-                    if (this.itemManager && !this.itemManager.debugEnabled && this._debugUpdateInterval) {
-                        clearInterval(this._debugUpdateInterval);
-                        this._debugUpdateInterval = null;
+                        console.log('🔍 debugEnabled after toggle:', this.itemManager.debugEnabled);
                     }
                 } else if (e.key === '9') {
                     // Toggle physics walls visibility for debugging
