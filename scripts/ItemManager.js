@@ -84,8 +84,11 @@ class ItemManager {
 
     _worldToTruckLocalXZ(worldX, worldZ) {
         // Use Babylon's matrix for accurate transformation
-        // Ensure matrix is fresh by computing it first
+        // CRITICAL: Sync root transform with truck's current position/rotation first
         if (this.truck.root) {
+            this.truck.root.position.x = this.truck.position.x;
+            this.truck.root.position.z = this.truck.position.z;
+            this.truck.root.rotation.y = this.truck.rotation;
             this.truck.root.computeWorldMatrix(true);
             const invMatrix = this.truck.root.getWorldMatrix().clone();
             invMatrix.invert();
@@ -101,8 +104,11 @@ class ItemManager {
 
     _truckLocalToWorldXZ(localX, localZ) {
         // Use Babylon's matrix for accurate transformation
-        // Ensure matrix is fresh by computing it first
+        // CRITICAL: Sync root transform with truck's current position/rotation first
         if (this.truck.root) {
+            this.truck.root.position.x = this.truck.position.x;
+            this.truck.root.position.z = this.truck.position.z;
+            this.truck.root.rotation.y = this.truck.rotation;
             this.truck.root.computeWorldMatrix(true);
             const localVec = new BABYLON.Vector3(localX, 0, localZ);
             const worldVec = BABYLON.Vector3.TransformCoordinates(localVec, this.truck.root.getWorldMatrix());

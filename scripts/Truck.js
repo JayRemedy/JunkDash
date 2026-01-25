@@ -1562,6 +1562,11 @@ class Truck {
     
     addLoadedItem(item) {
         // Just track the item - physics handles everything now
+        // CRITICAL: Sync root transform before computing matrix
+        this.root.position.x = this.position.x;
+        this.root.position.z = this.position.z;
+        this.root.rotation.y = this.rotation;
+
         // Store initial local position using Babylon's matrix (guaranteed correct)
         this.root.computeWorldMatrix(true);
         const invMatrix = this.root.getWorldMatrix().clone();
@@ -1620,6 +1625,12 @@ class Truck {
         // Items are physics bodies that collide with the truck's animated walls/floor.
         // The key insight: DON'T fight the physics engine with manual velocity manipulation.
         // Instead, rely on high friction and aggressive velocity capping to keep items stable.
+
+        // CRITICAL: Sync root transform with current position/rotation BEFORE computing matrix
+        // (applyTransform happens AFTER this function, so root may be stale)
+        this.root.position.x = this.position.x;
+        this.root.position.z = this.position.z;
+        this.root.rotation.y = this.rotation;
 
         // Use Babylon's matrices for coordinate transforms (guaranteed correct)
         this.root.computeWorldMatrix(true);
