@@ -948,12 +948,10 @@ class ItemManager {
         // Item rotation relative to truck
         const localRotation = placeRotation - truckRot;
 
-        // Set LOCAL position (relative to truck.root)
+        // PARENT FIRST, then set position (position becomes local coords after parenting)
+        mesh.parent = this.truck.root;
         mesh.position = new BABYLON.Vector3(localX, localY, localZ);
         mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(localRotation, 0, 0);
-
-        // PARENT to truck.root - item now moves with truck automatically!
-        mesh.parent = this.truck.root;
 
         // Attach 3D model if available
         this.attachModelIfAvailable(mesh, itemDef, { boxSize });
@@ -1180,9 +1178,9 @@ class ItemManager {
         this.debugFloorPlane.material = floorMat;
         this.debugFloorPlane.isPickable = false;
 
-        // Position in LOCAL coordinates (relative to truck.root)
+        // PARENT FIRST, then set position (position becomes local coords)
+        this.debugFloorPlane.parent = truck.root;
         this.debugFloorPlane.position.set(0, floorY, 0);
-        this.debugFloorPlane.parent = truck.root; // PARENT to truck - this makes it move!
 
         // === YELLOW CORNER MARKERS ===
         this.debugCornerMarkers = [];
@@ -1200,8 +1198,8 @@ class ItemManager {
             const marker = BABYLON.MeshBuilder.CreateSphere(`debugMarker_${c.name}`, { diameter: 0.2 }, this.scene);
             marker.material = markerMat;
             marker.isPickable = false;
-            marker.position.set(c.x, floorY + 0.15, c.z); // LOCAL position
-            marker.parent = truck.root; // PARENT to truck
+            marker.parent = truck.root; // PARENT FIRST
+            marker.position.set(c.x, floorY + 0.15, c.z); // Then set LOCAL position
             this.debugCornerMarkers.push(marker);
         }
 
@@ -1211,8 +1209,8 @@ class ItemManager {
         this.debugTruckCenterMarker = BABYLON.MeshBuilder.CreateSphere('debugCenter', { diameter: 0.3 }, this.scene);
         this.debugTruckCenterMarker.material = centerMat;
         this.debugTruckCenterMarker.isPickable = false;
-        this.debugTruckCenterMarker.position.set(0, floorY + 0.3, 0); // LOCAL position at truck origin
-        this.debugTruckCenterMarker.parent = truck.root; // PARENT to truck
+        this.debugTruckCenterMarker.parent = truck.root; // PARENT FIRST
+        this.debugTruckCenterMarker.position.set(0, floorY + 0.3, 0); // Then LOCAL position
 
         // === BLUE FORWARD ARROW ===
         // Points toward the cab (local -Z direction)
@@ -1226,8 +1224,8 @@ class ItemManager {
         this.debugForwardArrow.material = arrowMat;
         this.debugForwardArrow.isPickable = false;
         // Position arrow extending from center toward front (local -Z)
-        this.debugForwardArrow.position.set(0, floorY + 0.3, -halfL - 0.5); // LOCAL position
-        this.debugForwardArrow.parent = truck.root; // PARENT to truck
+        this.debugForwardArrow.parent = truck.root; // PARENT FIRST
+        this.debugForwardArrow.position.set(0, floorY + 0.3, -halfL - 0.5); // Then LOCAL position
 
         console.log('🔍 DEBUG: Created debug meshes parented to truck.root');
         console.log('🔍 DEBUG: truck.root.position:', truck.root.position.toString());
