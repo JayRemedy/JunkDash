@@ -83,28 +83,35 @@ class ItemManager {
     }
 
     _worldToTruckLocalXZ(worldX, worldZ) {
-        // Use truck's authoritative position/rotation (world matrix may be stale)
-        // Babylon.js Y rotation is opposite to standard 2D, so use +rot for inverse
+        // Use Babylon's matrix for accurate transformation
+        // Ensure matrix is fresh by computing it first
+        if (this.truck.root) {
+            this.truck.root.computeWorldMatrix(true);
+            const invMatrix = this.truck.root.getWorldMatrix().clone();
+            invMatrix.invert();
+            const worldVec = new BABYLON.Vector3(worldX, 0, worldZ);
+            const localVec = BABYLON.Vector3.TransformCoordinates(worldVec, invMatrix);
+            return { x: localVec.x, z: localVec.z };
+        }
+        // Fallback
         const dx = worldX - this.truck.position.x;
         const dz = worldZ - this.truck.position.z;
-        const rot = this.truck.rotation;
-        const cos = Math.cos(rot);
-        const sin = Math.sin(rot);
-        return {
-            x: dx * cos - dz * sin,
-            z: dx * sin + dz * cos
-        };
+        return { x: dx, z: dz };
     }
 
     _truckLocalToWorldXZ(localX, localZ) {
-        // Use truck's authoritative position/rotation (world matrix may be stale)
-        // Babylon.js Y rotation is opposite to standard 2D, so negate for forward transform
-        const rot = -this.truck.rotation;
-        const cos = Math.cos(rot);
-        const sin = Math.sin(rot);
+        // Use Babylon's matrix for accurate transformation
+        // Ensure matrix is fresh by computing it first
+        if (this.truck.root) {
+            this.truck.root.computeWorldMatrix(true);
+            const localVec = new BABYLON.Vector3(localX, 0, localZ);
+            const worldVec = BABYLON.Vector3.TransformCoordinates(localVec, this.truck.root.getWorldMatrix());
+            return { x: worldVec.x, z: worldVec.z };
+        }
+        // Fallback
         return {
-            x: this.truck.position.x + localX * cos - localZ * sin,
-            z: this.truck.position.z + localX * sin + localZ * cos
+            x: this.truck.position.x + localX,
+            z: this.truck.position.z + localZ
         };
     }
 
