@@ -1145,8 +1145,26 @@ class ItemManager {
     }
 
     updateDebugVisualization() {
-        // No-op - meshes are parented to truck.root and move automatically
-        // This function exists for API compatibility
+        // DEBUG: Verify parent relationship every call
+        if (this.debugFloorPlane) {
+            const parent = this.debugFloorPlane.parent;
+            const truckRoot = this.truck?.root;
+            if (parent !== truckRoot) {
+                console.error('🔴 DEBUG: Floor parent mismatch!',
+                    'parent:', parent?.name,
+                    'should be:', truckRoot?.name);
+                // Re-parent if lost
+                if (truckRoot) {
+                    this.debugFloorPlane.parent = truckRoot;
+                    console.log('🔧 DEBUG: Re-parented floor to truck.root');
+                }
+            }
+            // Log world position
+            this.debugFloorPlane.computeWorldMatrix(true);
+            const worldPos = this.debugFloorPlane.getAbsolutePosition();
+            console.log('🔍 DEBUG: Floor world pos:', worldPos.toString(),
+                'truck.root pos:', truckRoot?.position.toString());
+        }
     }
 
     _createDebugMeshes() {
@@ -1179,8 +1197,21 @@ class ItemManager {
         this.debugFloorPlane.isPickable = false;
 
         // PARENT FIRST, then set position (position becomes local coords)
+        console.log('🔍 DEBUG: Before parent - floor pos:', this.debugFloorPlane.position.toString());
+        console.log('🔍 DEBUG: truck.root position:', truck.root.position.toString());
+
         this.debugFloorPlane.parent = truck.root;
+        console.log('🔍 DEBUG: After parent assignment - floor.parent:', this.debugFloorPlane.parent?.name);
+        console.log('🔍 DEBUG: After parent - floor local pos:', this.debugFloorPlane.position.toString());
+
         this.debugFloorPlane.position.set(0, floorY, 0);
+        console.log('🔍 DEBUG: After position.set - floor local pos:', this.debugFloorPlane.position.toString());
+
+        // Force world matrix computation and log result
+        this.debugFloorPlane.computeWorldMatrix(true);
+        const floorWorldPos = this.debugFloorPlane.getAbsolutePosition();
+        console.log('🔍 DEBUG: Floor world position:', floorWorldPos.toString());
+        console.log('🔍 DEBUG: Expected world position: ~', truck.root.position.toString());
 
         // === YELLOW CORNER MARKERS ===
         this.debugCornerMarkers = [];
