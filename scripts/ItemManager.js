@@ -1196,9 +1196,19 @@ class ItemManager {
         this.debugFloorPlane.material = floorMat;
         this.debugFloorPlane.isPickable = false;
 
+        // Check if truck.position and truck.root.position are in sync
+        console.log('🔍 DEBUG: truck.position (internal):', truck.position.toString());
+        console.log('🔍 DEBUG: truck.root.position (visual):', truck.root.position.toString());
+
+        // FORCE SYNC: Ensure truck.root matches truck.position before parenting
+        truck.root.position.x = truck.position.x;
+        truck.root.position.z = truck.position.z;
+        truck.root.rotation.y = truck.rotation;
+        truck.root.computeWorldMatrix(true);
+        console.log('🔍 DEBUG: After sync - truck.root.position:', truck.root.position.toString());
+
         // PARENT FIRST, then set position (position becomes local coords)
         console.log('🔍 DEBUG: Before parent - floor pos:', this.debugFloorPlane.position.toString());
-        console.log('🔍 DEBUG: truck.root position:', truck.root.position.toString());
 
         this.debugFloorPlane.parent = truck.root;
         console.log('🔍 DEBUG: After parent assignment - floor.parent:', this.debugFloorPlane.parent?.name);
@@ -1261,10 +1271,31 @@ class ItemManager {
         console.log('🔍 DEBUG: Created debug meshes parented to truck.root');
         console.log('🔍 DEBUG: truck.root.position:', truck.root.position.toString());
         console.log('🔍 DEBUG: truck.root.rotation.y:', truck.root.rotation.y);
+
+        // Add frame-by-frame observer to monitor parent/position
+        this._debugFrameCount = 0;
+        this._debugObserver = this.scene.onBeforeRenderObservable.add(() => {
+            this._debugFrameCount++;
+            // Only log every 60 frames (about once per second)
+            if (this._debugFrameCount % 60 === 0 && this.debugFloorPlane) {
+                const parent = this.debugFloorPlane.parent;
+                const localPos = this.debugFloorPlane.position;
+                this.debugFloorPlane.computeWorldMatrix(true);
+                const worldPos = this.debugFloorPlane.getAbsolutePosition();
+                const truckPos = this.truck.root.position;
+                console.log(`🔄 FRAME ${this._debugFrameCount}: parent=${parent?.name}, localPos=${localPos.toString()}, worldPos=${worldPos.toString()}, truckRootPos=${truckPos.toString()}`);
+            }
+        });
     }
 
     // Clean up all debug meshes
     cleanupDebugMeshes() {
+        // Remove frame monitor observer
+        if (this._debugObserver) {
+            this.scene.onBeforeRenderObservable.remove(this._debugObserver);
+            this._debugObserver = null;
+        }
+
         // Remove old observer if it exists (legacy cleanup)
         if (this._debugUpdateObserver) {
             this.scene.onBeforeRenderObservable.remove(this._debugUpdateObserver);
