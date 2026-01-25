@@ -1561,14 +1561,22 @@ class Truck {
     }
     
     addLoadedItem(item) {
-        // Just track the item - physics handles everything now
-        // CRITICAL: Sync root transform before computing matrix
+        // Items are now PARENTED to truck.root in ItemManager.placeItem()
+        // They move automatically with the truck - no physics or manual updates needed!
+
+        // If item is parented, local coords are already set by ItemManager
+        if (item.isParented) {
+            console.log(`📦 TRUCK: Added parented item ${item.id} at local (${item.localX?.toFixed(2)}, ${item.localZ?.toFixed(2)})`);
+            this.loadedItems.push(item);
+            return;
+        }
+
+        // Legacy path for non-parented items (shouldn't happen anymore)
         this.root.position.x = this.position.x;
         this.root.position.z = this.position.z;
         this.root.rotation.y = this.rotation;
-
-        // Store initial local position using Babylon's matrix (guaranteed correct)
         this.root.computeWorldMatrix(true);
+
         const invMatrix = this.root.getWorldMatrix().clone();
         invMatrix.invert();
         const worldVec = new BABYLON.Vector3(item.mesh.position.x, item.mesh.position.y, item.mesh.position.z);
@@ -1576,7 +1584,7 @@ class Truck {
         item.localX = localVec.x;
         item.localZ = localVec.z;
         item.localY = localVec.y;
-        
+
         const meshQuat = item.mesh.rotationQuaternion
             ? item.mesh.rotationQuaternion.clone()
             : BABYLON.Quaternion.RotationYawPitchRoll(
@@ -1588,7 +1596,7 @@ class Truck {
         const truckQuatInv = truckQuat.clone();
         truckQuatInv.invert();
         item.localQuat = truckQuatInv.multiply(meshQuat);
-        
+
         this.loadedItems.push(item);
     }
 
@@ -1657,6 +1665,11 @@ class Truck {
         for (let i = 0; i < this.loadedItems.length; i++) {
             const item = this.loadedItems[i];
             if (!item.mesh) continue;
+
+            // PARENTED ITEMS: Skip all physics processing - they move with truck automatically!
+            if (item.isParented && item.mesh.parent === this.root) {
+                continue; // Item is parented to truck.root, no updates needed
+            }
 
             const body = item.mesh.physicsAggregate && item.mesh.physicsAggregate.body;
 

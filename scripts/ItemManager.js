@@ -927,46 +927,46 @@ class ItemManager {
         mat.roughness = 0.8;
         mesh.material = mat;
         
-        // Place at preview position with lift to prevent spawning inside floor
-        // Larger lift (2cm) prevents physics collision impulses from floor
-        mesh.position = new BABYLON.Vector3(placeX, placeY + 0.02, placeZ);
-        
+        // === NEW APPROACH: Parent items to truck.root ===
+        // Items are children of truck.root and move automatically with the truck.
+        // No physics needed while items are in the truck - this prevents all impulse issues.
+
+        // Convert world position to truck-local position
+        const truckX = this.truck.position.x;
+        const truckZ = this.truck.position.z;
+        const truckRot = this.truck.rotation;
+
+        // World to local conversion (inverse rotation)
+        const dx = placeX - truckX;
+        const dz = placeZ - truckZ;
+        const cos = Math.cos(truckRot);
+        const sin = Math.sin(truckRot);
+        const localX = dx * cos + dz * sin;
+        const localZ = -dx * sin + dz * cos;
+        const localY = placeY + 0.02; // Small lift above floor
+
+        // Item rotation relative to truck
+        const localRotation = placeRotation - truckRot;
+
+        // Set LOCAL position (relative to truck.root)
+        mesh.position = new BABYLON.Vector3(localX, localY, localZ);
+        mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(localRotation, 0, 0);
+
+        // PARENT to truck.root - item now moves with truck automatically!
+        mesh.parent = this.truck.root;
+
         // Attach 3D model if available
         this.attachModelIfAvailable(mesh, itemDef, { boxSize });
-        
-        // Use the rotation from preview (already correct world-space rotation)
-        const intendedRotation = placeRotation;
-        
-        // Set rotation BEFORE creating physics - Havok uses the mesh's current rotation when initializing
-        mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(intendedRotation, 0, 0);
-        
+
         mesh.receiveShadows = true;
-        mesh.isPickable = true; // So other items can stack on it
+        mesh.isPickable = true;
         this.sceneManager.addShadowCaster(mesh);
-        
-        // CRITICAL: Do NOT create physics yet!
-        // Havok applies collision impulses during PhysicsAggregate construction.
-        // We'll create physics later after the settling period.
-        const scaledMass = Math.max(3, itemDef.weight * 2.5);
-        const baseLinearDamping = 3.0;
-        const baseAngularDamping = 8.0;
 
-        // Store physics parameters on mesh for later creation
-        mesh._pendingPhysics = {
-            mass: scaledMass,
-            restitution: 0.01,
-            friction: 10.0,
-            boxSize: boxSize,
-            linearDamping: baseLinearDamping,
-            angularDamping: baseAngularDamping
-        };
-
-        console.log(`📦 PLACED ITEM ${itemDef.id}: NO PHYSICS YET, will create in 300ms. Position: (${mesh.position.x.toFixed(2)}, ${mesh.position.y.toFixed(2)}, ${mesh.position.z.toFixed(2)})`);
+        console.log(`📦 PLACED ITEM ${itemDef.id} (PARENTED): Local=(${localX.toFixed(2)}, ${localY.toFixed(2)}, ${localZ.toFixed(2)})`);
 
         const nowMs = performance.now();
 
-        // Track placed item (include volumeM3 which has packing factor applied)
-        // Physics will be created after settling period (300ms)
+        // Track placed item - NO PHYSICS needed while parented!
         const placedItem = {
             id: itemDef.id,
             mesh: mesh,
@@ -975,16 +975,15 @@ class ItemManager {
             volumeM3: itemDef.volumeM3,
             isPlaced: true,
             isFallen: false,
-            // Time when physics should be created
-            createPhysicsAt: nowMs + 300,
-            lockLateralUntil: nowMs + 800,
-            dampingBoostUntil: nowMs + 800,
-            baseLinearDamping,
-            baseAngularDamping
+            isParented: true, // Flag indicating item is parented to truck
+            localX: localX,
+            localY: localY,
+            localZ: localZ,
+            localRotation: localRotation
         };
         this.placedItems.push(placedItem);
-        
-        // Register with truck so it moves with the truck
+
+        // Register with truck for tracking (but no physics management needed)
         this.truck.addLoadedItem(placedItem);
         
         // Remove item from queue (mark as used)
