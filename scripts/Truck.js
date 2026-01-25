@@ -1562,20 +1562,16 @@ class Truck {
     
     addLoadedItem(item) {
         // Just track the item - physics handles everything now
-        // Store initial local position using Babylon's inverse world matrix
-        if (this.root) {
-            const worldVec = new BABYLON.Vector3(item.mesh.position.x, item.mesh.position.y, item.mesh.position.z);
-            const invMatrix = this.root.getWorldMatrix().clone();
-            invMatrix.invert();
-            const localVec = BABYLON.Vector3.TransformCoordinates(worldVec, invMatrix);
-            item.localX = localVec.x;
-            item.localZ = localVec.z;
-            item.localY = localVec.y;
-        } else {
-            item.localX = item.mesh.position.x - this.position.x;
-            item.localZ = item.mesh.position.z - this.position.z;
-            item.localY = item.mesh.position.y;
-        }
+        // Store initial local position using world-to-local transformation
+        const dx = item.mesh.position.x - this.position.x;
+        const dz = item.mesh.position.z - this.position.z;
+        const rot = this.rotation;
+        const cos = Math.cos(rot);
+        const sin = Math.sin(rot);
+        // Inverse rotation to get local coordinates
+        item.localX = dx * cos + dz * sin;
+        item.localZ = -dx * sin + dz * cos;
+        item.localY = item.mesh.position.y;
         
         const meshQuat = item.mesh.rotationQuaternion
             ? item.mesh.rotationQuaternion.clone()
@@ -1626,10 +1622,10 @@ class Truck {
         // The key insight: DON'T fight the physics engine with manual velocity manipulation.
         // Instead, rely on high friction and aggressive velocity capping to keep items stable.
 
-        // Get matrices for coordinate transformations
-        const worldMatrix = this.root ? this.root.getWorldMatrix() : null;
-        const invMatrix = worldMatrix ? worldMatrix.clone() : null;
-        if (invMatrix) invMatrix.invert();
+        // Use truck's authoritative position/rotation for coordinate transforms
+        const rot = this.rotation;
+        const cos = Math.cos(rot);
+        const sin = Math.sin(rot);
         
         const itemsNowMs = performance.now();
         const isTruckMoving = Math.abs(this.speed) > 0.5;
@@ -1728,12 +1724,12 @@ class Truck {
 
                 // Move item with truck by maintaining its local position
                 // This prevents items from being left behind when truck moves during settling
-                if (item.localX !== undefined && item.localZ !== undefined && worldMatrix) {
-                    // Use Babylon's matrix for accurate local-to-world transformation
-                    const localVec = new BABYLON.Vector3(item.localX, item.mesh.position.y, item.localZ);
-                    const worldVec = BABYLON.Vector3.TransformCoordinates(localVec, worldMatrix);
-                    item.mesh.position.x = worldVec.x;
-                    item.mesh.position.z = worldVec.z;
+                if (item.localX !== undefined && item.localZ !== undefined) {
+                    // Local-to-world transformation: rotate by truck rotation, then translate
+                    const newWorldX = this.position.x + item.localX * cos - item.localZ * sin;
+                    const newWorldZ = this.position.z + item.localX * sin + item.localZ * cos;
+                    item.mesh.position.x = newWorldX;
+                    item.mesh.position.z = newWorldZ;
 
                     // Also update rotation using localQuat (stored in addLoadedItem)
                     if (item.localQuat) {
@@ -1759,22 +1755,11 @@ class Truck {
                 continue;
             }
 
-            // Calculate local position using Babylon's inverse matrix
-            let localX = 0, localZ = 0;
-            if (invMatrix) {
-                const worldVec = new BABYLON.Vector3(item.mesh.position.x, item.mesh.position.y, item.mesh.position.z);
-                const localVec = BABYLON.Vector3.TransformCoordinates(worldVec, invMatrix);
-                localX = localVec.x;
-                localZ = localVec.z;
-            } else {
-                // Fallback to manual calculation if no matrix
-                const cos = Math.cos(-this.rotation);
-                const sin = Math.sin(-this.rotation);
-                const dx = item.mesh.position.x - this.position.x;
-                const dz = item.mesh.position.z - this.position.z;
-                localX = dx * cos + dz * sin;
-                localZ = -dx * sin + dz * cos;
-            }
+            // Calculate local position (world-to-local: inverse rotation)
+            const dx = item.mesh.position.x - this.position.x;
+            const dz = item.mesh.position.z - this.position.z;
+            const localX = dx * cos + dz * sin;
+            const localZ = -dx * sin + dz * cos;
 
             if (body && item.dampingBoostUntil && itemsNowMs < item.dampingBoostUntil && !isTruckMoving) {
                 const boostedLinear = Math.max(item.baseLinearDamping || 3.0, 12.0);
@@ -1828,19 +1813,9 @@ class Truck {
             // Back is open - don't clamp positive Z
             
             if (needsClamp && !item.isFallen) {
-                // Clamp position using Babylon matrix
-                let newWorldX, newWorldZ;
-                if (worldMatrix) {
-                    const clampedLocal = new BABYLON.Vector3(clampedLocalX, item.mesh.position.y, clampedLocalZ);
-                    const clampedWorld = BABYLON.Vector3.TransformCoordinates(clampedLocal, worldMatrix);
-                    newWorldX = clampedWorld.x;
-                    newWorldZ = clampedWorld.z;
-                } else {
-                    const cos = Math.cos(-this.rotation);
-                    const sin = Math.sin(-this.rotation);
-                    newWorldX = this.position.x + clampedLocalX * cos - clampedLocalZ * sin;
-                    newWorldZ = this.position.z + clampedLocalX * sin + clampedLocalZ * cos;
-                }
+                // Clamp position: local-to-world transformation
+                const newWorldX = this.position.x + clampedLocalX * cos - clampedLocalZ * sin;
+                const newWorldZ = this.position.z + clampedLocalX * sin + clampedLocalZ * cos;
                 item.mesh.position.x = newWorldX;
                 item.mesh.position.z = newWorldZ;
                 if (body) {
@@ -1848,23 +1823,24 @@ class Truck {
                     this.teleportItemBody(item, body, new BABYLON.Vector3(newWorldX, item.mesh.position.y, newWorldZ), quat, itemsNowMs);
                 }
 
-                // Also clamp velocity toward the wall using matrices
-                if (body && body.getLinearVelocity && body.setLinearVelocity && invMatrix) {
+                // Also clamp velocity toward the wall
+                if (body && body.getLinearVelocity && body.setLinearVelocity) {
                     const vel = body.getLinearVelocity();
                     if (vel) {
-                        // Transform velocity to local space (direction only, ignoring translation)
-                        const velLocal = BABYLON.Vector3.TransformNormal(vel, invMatrix);
-                        let newLocalVelX = velLocal.x;
-                        let newLocalVelZ = velLocal.z;
+                        // Transform velocity to local space (inverse rotation)
+                        const localVelX = vel.x * cos + vel.z * sin;
+                        const localVelZ = -vel.x * sin + vel.z * cos;
+                        let newLocalVelX = localVelX;
+                        let newLocalVelZ = localVelZ;
 
-                        if (localX < -maxLocalX && velLocal.x < 0) newLocalVelX = 0;
-                        if (localX > maxLocalX && velLocal.x > 0) newLocalVelX = 0;
-                        if (localZ < minLocalZ && velLocal.z < 0) newLocalVelZ = 0;
+                        if (localX < -maxLocalX && localVelX < 0) newLocalVelX = 0;
+                        if (localX > maxLocalX && localVelX > 0) newLocalVelX = 0;
+                        if (localZ < minLocalZ && localVelZ < 0) newLocalVelZ = 0;
 
-                        // Transform back to world space
-                        const newLocalVel = new BABYLON.Vector3(newLocalVelX, vel.y, newLocalVelZ);
-                        const newWorldVel = BABYLON.Vector3.TransformNormal(newLocalVel, worldMatrix);
-                        body.setLinearVelocity(new BABYLON.Vector3(newWorldVel.x, vel.y, newWorldVel.z));
+                        // Transform back to world space (forward rotation)
+                        const newWorldVelX = newLocalVelX * cos - newLocalVelZ * sin;
+                        const newWorldVelZ = newLocalVelX * sin + newLocalVelZ * cos;
+                        body.setLinearVelocity(new BABYLON.Vector3(newWorldVelX, vel.y, newWorldVelZ));
                     }
                 }
 
