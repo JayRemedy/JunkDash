@@ -1563,14 +1563,14 @@ class Truck {
     addLoadedItem(item) {
         // Just track the item - physics handles everything now
         // Store initial local position using world-to-local transformation
+        // Babylon.js Y rotation is opposite to standard 2D, use +rot for inverse
         const dx = item.mesh.position.x - this.position.x;
         const dz = item.mesh.position.z - this.position.z;
         const rot = this.rotation;
         const cos = Math.cos(rot);
         const sin = Math.sin(rot);
-        // Inverse rotation to get local coordinates
-        item.localX = dx * cos + dz * sin;
-        item.localZ = -dx * sin + dz * cos;
+        item.localX = dx * cos - dz * sin;
+        item.localZ = dx * sin + dz * cos;
         item.localY = item.mesh.position.y;
         
         const meshQuat = item.mesh.rotationQuaternion
@@ -1623,7 +1623,8 @@ class Truck {
         // Instead, rely on high friction and aggressive velocity capping to keep items stable.
 
         // Use truck's authoritative position/rotation for coordinate transforms
-        const rot = this.rotation;
+        // Babylon.js Y rotation is opposite to standard 2D, so negate for transforms
+        const rot = -this.rotation;
         const cos = Math.cos(rot);
         const sin = Math.sin(rot);
         
@@ -1755,11 +1756,13 @@ class Truck {
                 continue;
             }
 
-            // Calculate local position (world-to-local: inverse rotation)
+            // Calculate local position (world-to-local uses +rotation, opposite of local-to-world)
             const dx = item.mesh.position.x - this.position.x;
             const dz = item.mesh.position.z - this.position.z;
-            const localX = dx * cos + dz * sin;
-            const localZ = -dx * sin + dz * cos;
+            const cosInv = Math.cos(this.rotation);
+            const sinInv = Math.sin(this.rotation);
+            const localX = dx * cosInv - dz * sinInv;
+            const localZ = dx * sinInv + dz * cosInv;
 
             if (body && item.dampingBoostUntil && itemsNowMs < item.dampingBoostUntil && !isTruckMoving) {
                 const boostedLinear = Math.max(item.baseLinearDamping || 3.0, 12.0);
@@ -1827,9 +1830,9 @@ class Truck {
                 if (body && body.getLinearVelocity && body.setLinearVelocity) {
                     const vel = body.getLinearVelocity();
                     if (vel) {
-                        // Transform velocity to local space (inverse rotation)
-                        const localVelX = vel.x * cos + vel.z * sin;
-                        const localVelZ = -vel.x * sin + vel.z * cos;
+                        // Transform velocity to local space (use +rotation, same as position world-to-local)
+                        const localVelX = vel.x * cosInv - vel.z * sinInv;
+                        const localVelZ = vel.x * sinInv + vel.z * cosInv;
                         let newLocalVelX = localVelX;
                         let newLocalVelZ = localVelZ;
 
@@ -1837,7 +1840,7 @@ class Truck {
                         if (localX > maxLocalX && localVelX > 0) newLocalVelX = 0;
                         if (localZ < minLocalZ && localVelZ < 0) newLocalVelZ = 0;
 
-                        // Transform back to world space (forward rotation)
+                        // Transform back to world space (use -rotation, same as position local-to-world)
                         const newWorldVelX = newLocalVelX * cos - newLocalVelZ * sin;
                         const newWorldVelZ = newLocalVelX * sin + newLocalVelZ * cos;
                         body.setLinearVelocity(new BABYLON.Vector3(newWorldVelX, vel.y, newWorldVelZ));

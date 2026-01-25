@@ -84,24 +84,24 @@ class ItemManager {
 
     _worldToTruckLocalXZ(worldX, worldZ) {
         // Use truck's authoritative position/rotation (world matrix may be stale)
+        // Babylon.js Y rotation is opposite to standard 2D, so use +rot for inverse
         const dx = worldX - this.truck.position.x;
         const dz = worldZ - this.truck.position.z;
         const rot = this.truck.rotation;
         const cos = Math.cos(rot);
         const sin = Math.sin(rot);
-        // Inverse rotation: rotate by -theta
         return {
-            x: dx * cos + dz * sin,
-            z: -dx * sin + dz * cos
+            x: dx * cos - dz * sin,
+            z: dx * sin + dz * cos
         };
     }
 
     _truckLocalToWorldXZ(localX, localZ) {
         // Use truck's authoritative position/rotation (world matrix may be stale)
-        const rot = this.truck.rotation;
+        // Babylon.js Y rotation is opposite to standard 2D, so negate for forward transform
+        const rot = -this.truck.rotation;
         const cos = Math.cos(rot);
         const sin = Math.sin(rot);
-        // Forward rotation: rotate by theta
         return {
             x: this.truck.position.x + localX * cos - localZ * sin,
             z: this.truck.position.z + localX * sin + localZ * cos
@@ -1148,11 +1148,9 @@ class ItemManager {
         const pz = truck.position.z;
         const rot = truck.rotation;
 
-        // Standard 2D rotation: for a point (x,z) rotated by angle theta around origin
-        // newX = x*cos(theta) - z*sin(theta)
-        // newZ = x*sin(theta) + z*cos(theta)
-        const cos = Math.cos(rot);
-        const sin = Math.sin(rot);
+        // Babylon.js Y rotation is opposite to standard 2D convention, so negate
+        const cos = Math.cos(-rot);
+        const sin = Math.sin(-rot);
 
         // Calculate the 4 corners of the cargo area in WORLD coordinates
         const localCorners = [
