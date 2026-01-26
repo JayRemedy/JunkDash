@@ -1243,11 +1243,12 @@ class ItemManager {
         const sin = Math.sin(truckRot);
 
         // Helper to transform local to world
+        // Babylon.js Y rotation: local +X maps to (cos, sin), local +Z maps to (sin, cos)
         const toWorld = (local) => {
             return {
-                x: truckX + local.x * cos - local.z * sin,
+                x: truckX + local.x * cos + local.z * sin,
                 y: local.y,
-                z: truckZ + local.x * sin + local.z * cos
+                z: truckZ - local.x * sin + local.z * cos
             };
         };
 
