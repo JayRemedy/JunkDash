@@ -1145,26 +1145,8 @@ class ItemManager {
     }
 
     updateDebugVisualization() {
-        // DEBUG: Verify parent relationship every call
-        if (this.debugFloorPlane) {
-            const parent = this.debugFloorPlane.parent;
-            const truckRoot = this.truck?.root;
-            if (parent !== truckRoot) {
-                console.error('🔴 DEBUG: Floor parent mismatch!',
-                    'parent:', parent?.name,
-                    'should be:', truckRoot?.name);
-                // Re-parent if lost
-                if (truckRoot) {
-                    this.debugFloorPlane.parent = truckRoot;
-                    console.log('🔧 DEBUG: Re-parented floor to truck.root');
-                }
-            }
-            // Log world position
-            this.debugFloorPlane.computeWorldMatrix(true);
-            const worldPos = this.debugFloorPlane.getAbsolutePosition();
-            console.log('🔍 DEBUG: Floor world pos:', worldPos.toString(),
-                'truck.root pos:', truckRoot?.position.toString());
-        }
+        // Position updates now happen automatically via render loop observer
+        // This function exists for API compatibility
     }
 
     _createDebugMeshes() {
@@ -1181,8 +1163,20 @@ class ItemManager {
         const halfL = truck.cargoLength / 2;
         const floorY = truck.cargoFloorHeight + 0.05; // Slightly above cargo floor
 
+        // Store local offsets for manual position updates
+        this._debugLocalOffsets = {
+            floor: { x: 0, y: floorY, z: 0 },
+            corners: [
+                { x: -halfW, y: floorY + 0.15, z: -halfL },
+                { x:  halfW, y: floorY + 0.15, z: -halfL },
+                { x:  halfW, y: floorY + 0.15, z:  halfL },
+                { x: -halfW, y: floorY + 0.15, z:  halfL },
+            ],
+            center: { x: 0, y: floorY + 0.3, z: 0 },
+            arrow: { x: 0, y: floorY + 0.3, z: -halfL - 0.5 }
+        };
+
         // === GREEN FLOOR PLANE ===
-        // Shows the cargo area - parented to truck.root so it moves automatically
         this.debugFloorPlane = BABYLON.MeshBuilder.CreateGround('debugFloorPlane', {
             width: truck.cargoWidth,
             height: truck.cargoLength
@@ -1196,51 +1190,15 @@ class ItemManager {
         this.debugFloorPlane.material = floorMat;
         this.debugFloorPlane.isPickable = false;
 
-        // Check if truck.position and truck.root.position are in sync
-        console.log('🔍 DEBUG: truck.position (internal):', truck.position.toString());
-        console.log('🔍 DEBUG: truck.root.position (visual):', truck.root.position.toString());
-
-        // FORCE SYNC: Ensure truck.root matches truck.position before parenting
-        truck.root.position.x = truck.position.x;
-        truck.root.position.z = truck.position.z;
-        truck.root.rotation.y = truck.rotation;
-        truck.root.computeWorldMatrix(true);
-        console.log('🔍 DEBUG: After sync - truck.root.position:', truck.root.position.toString());
-
-        // PARENT FIRST, then set position (position becomes local coords)
-        console.log('🔍 DEBUG: Before parent - floor pos:', this.debugFloorPlane.position.toString());
-
-        this.debugFloorPlane.parent = truck.root;
-        console.log('🔍 DEBUG: After parent assignment - floor.parent:', this.debugFloorPlane.parent?.name);
-        console.log('🔍 DEBUG: After parent - floor local pos:', this.debugFloorPlane.position.toString());
-
-        this.debugFloorPlane.position.set(0, floorY, 0);
-        console.log('🔍 DEBUG: After position.set - floor local pos:', this.debugFloorPlane.position.toString());
-
-        // Force world matrix computation and log result
-        this.debugFloorPlane.computeWorldMatrix(true);
-        const floorWorldPos = this.debugFloorPlane.getAbsolutePosition();
-        console.log('🔍 DEBUG: Floor world position:', floorWorldPos.toString());
-        console.log('🔍 DEBUG: Expected world position: ~', truck.root.position.toString());
-
         // === YELLOW CORNER MARKERS ===
         this.debugCornerMarkers = [];
         const markerMat = new BABYLON.StandardMaterial('debugMarkerMat', this.scene);
         markerMat.emissiveColor = new BABYLON.Color3(1, 1, 0);
 
-        const corners = [
-            { x: -halfW, z: -halfL, name: 'FL' }, // Front-Left
-            { x:  halfW, z: -halfL, name: 'FR' }, // Front-Right
-            { x:  halfW, z:  halfL, name: 'BL' }, // Back-Left
-            { x: -halfW, z:  halfL, name: 'BR' }, // Back-Right
-        ];
-
-        for (const c of corners) {
-            const marker = BABYLON.MeshBuilder.CreateSphere(`debugMarker_${c.name}`, { diameter: 0.2 }, this.scene);
+        for (let i = 0; i < 4; i++) {
+            const marker = BABYLON.MeshBuilder.CreateSphere(`debugMarker_${i}`, { diameter: 0.2 }, this.scene);
             marker.material = markerMat;
             marker.isPickable = false;
-            marker.parent = truck.root; // PARENT FIRST
-            marker.position.set(c.x, floorY + 0.15, c.z); // Then set LOCAL position
             this.debugCornerMarkers.push(marker);
         }
 
@@ -1250,11 +1208,8 @@ class ItemManager {
         this.debugTruckCenterMarker = BABYLON.MeshBuilder.CreateSphere('debugCenter', { diameter: 0.3 }, this.scene);
         this.debugTruckCenterMarker.material = centerMat;
         this.debugTruckCenterMarker.isPickable = false;
-        this.debugTruckCenterMarker.parent = truck.root; // PARENT FIRST
-        this.debugTruckCenterMarker.position.set(0, floorY + 0.3, 0); // Then LOCAL position
 
         // === BLUE FORWARD ARROW ===
-        // Points toward the cab (local -Z direction)
         const arrowMat = new BABYLON.StandardMaterial('debugArrowMat', this.scene);
         arrowMat.emissiveColor = new BABYLON.Color3(0, 0.5, 1);
         this.debugForwardArrow = BABYLON.MeshBuilder.CreateBox('debugArrow', {
@@ -1264,43 +1219,77 @@ class ItemManager {
         }, this.scene);
         this.debugForwardArrow.material = arrowMat;
         this.debugForwardArrow.isPickable = false;
-        // Position arrow extending from center toward front (local -Z)
-        this.debugForwardArrow.parent = truck.root; // PARENT FIRST
-        this.debugForwardArrow.position.set(0, floorY + 0.3, -halfL - 0.5); // Then LOCAL position
 
-        console.log('🔍 DEBUG: Created debug meshes parented to truck.root');
-        console.log('🔍 DEBUG: truck.root.position:', truck.root.position.toString());
-        console.log('🔍 DEBUG: truck.root.rotation.y:', truck.root.rotation.y);
-
-        // Add frame-by-frame observer to monitor parent/position
-        this._debugFrameCount = 0;
+        // Add render loop observer to manually update positions every frame
         this._debugObserver = this.scene.onBeforeRenderObservable.add(() => {
-            this._debugFrameCount++;
-            // Only log every 60 frames (about once per second)
-            if (this._debugFrameCount % 60 === 0 && this.debugFloorPlane) {
-                const parent = this.debugFloorPlane.parent;
-                const localPos = this.debugFloorPlane.position;
-                this.debugFloorPlane.computeWorldMatrix(true);
-                const worldPos = this.debugFloorPlane.getAbsolutePosition();
-                const truckPos = this.truck.root.position;
-                console.log(`🔄 FRAME ${this._debugFrameCount}: parent=${parent?.name}, localPos=${localPos.toString()}, worldPos=${worldPos.toString()}, truckRootPos=${truckPos.toString()}`);
-            }
+            this._updateDebugMeshPositions();
         });
+
+        // Initial position update
+        this._updateDebugMeshPositions();
+
+        console.log('🔍 DEBUG: Created debug meshes with manual position updates');
+    }
+
+    // Manually transform local offsets to world positions each frame
+    _updateDebugMeshPositions() {
+        const truck = this.truck;
+        if (!truck) return;
+
+        const truckX = truck.position.x;
+        const truckZ = truck.position.z;
+        const truckRot = truck.rotation;
+        const cos = Math.cos(truckRot);
+        const sin = Math.sin(truckRot);
+
+        // Helper to transform local to world
+        const toWorld = (local) => {
+            return {
+                x: truckX + local.x * cos - local.z * sin,
+                y: local.y,
+                z: truckZ + local.x * sin + local.z * cos
+            };
+        };
+
+        // Update floor
+        if (this.debugFloorPlane && this._debugLocalOffsets) {
+            const pos = toWorld(this._debugLocalOffsets.floor);
+            this.debugFloorPlane.position.set(pos.x, pos.y, pos.z);
+            this.debugFloorPlane.rotation.y = truckRot;
+        }
+
+        // Update corner markers
+        if (this.debugCornerMarkers && this._debugLocalOffsets) {
+            this.debugCornerMarkers.forEach((marker, i) => {
+                const pos = toWorld(this._debugLocalOffsets.corners[i]);
+                marker.position.set(pos.x, pos.y, pos.z);
+            });
+        }
+
+        // Update center marker
+        if (this.debugTruckCenterMarker && this._debugLocalOffsets) {
+            const pos = toWorld(this._debugLocalOffsets.center);
+            this.debugTruckCenterMarker.position.set(pos.x, pos.y, pos.z);
+        }
+
+        // Update forward arrow
+        if (this.debugForwardArrow && this._debugLocalOffsets) {
+            const pos = toWorld(this._debugLocalOffsets.arrow);
+            this.debugForwardArrow.position.set(pos.x, pos.y, pos.z);
+            this.debugForwardArrow.rotation.y = truckRot;
+        }
     }
 
     // Clean up all debug meshes
     cleanupDebugMeshes() {
-        // Remove frame monitor observer
+        // Remove render loop observer
         if (this._debugObserver) {
             this.scene.onBeforeRenderObservable.remove(this._debugObserver);
             this._debugObserver = null;
         }
 
-        // Remove old observer if it exists (legacy cleanup)
-        if (this._debugUpdateObserver) {
-            this.scene.onBeforeRenderObservable.remove(this._debugUpdateObserver);
-            this._debugUpdateObserver = null;
-        }
+        // Clear local offsets
+        this._debugLocalOffsets = null;
 
         if (this.debugLines) {
             this.debugLines.forEach(line => line.dispose());
@@ -1311,24 +1300,18 @@ class ItemManager {
             this.debugAABBLines = [];
         }
         if (this.debugFloorPlane) {
-            this.debugFloorPlane.parent = null; // Unparent before dispose
             this.debugFloorPlane.dispose();
             this.debugFloorPlane = null;
         }
         if (this.debugCornerMarkers) {
-            this.debugCornerMarkers.forEach(m => {
-                m.parent = null;
-                m.dispose();
-            });
+            this.debugCornerMarkers.forEach(m => m.dispose());
             this.debugCornerMarkers = [];
         }
         if (this.debugTruckCenterMarker) {
-            this.debugTruckCenterMarker.parent = null;
             this.debugTruckCenterMarker.dispose();
             this.debugTruckCenterMarker = null;
         }
         if (this.debugForwardArrow) {
-            this.debugForwardArrow.parent = null;
             this.debugForwardArrow.dispose();
             this.debugForwardArrow = null;
         }
