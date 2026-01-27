@@ -2181,17 +2181,27 @@ class Truck {
             
             const halfX = item.size ? item.size.x / 2 : 0.3;
             const halfZ = item.size ? item.size.z / 2 : 0.3;
-            
+
             // Calculate local position (item center relative to truck center)
-            const dx = item.mesh.position.x - this.position.x;
-            const dz = item.mesh.position.z - this.position.z;
-            const localX = dx * cos + dz * sin;
-            const localZ = -dx * sin + dz * cos;
-            
+            let localX, localZ, localY;
+            if (item.isParented && item.mesh.parent === this.root) {
+                // Item is parented to truck.root - position IS local coordinates
+                localX = item.mesh.position.x;
+                localZ = item.mesh.position.z;
+                localY = item.mesh.position.y;
+            } else {
+                // Item is NOT parented - transform world to local
+                const dx = item.mesh.position.x - this.position.x;
+                const dz = item.mesh.position.z - this.position.z;
+                localX = dx * cos + dz * sin;
+                localZ = -dx * sin + dz * cos;
+                localY = item.mesh.position.y;
+            }
+
             // Update stored position
             item.localX = localX;
             item.localZ = localZ;
-            item.localY = item.mesh.position.y;
+            item.localY = localY;
             
             // body already defined above for velocity capping
             let correctedX = false;
@@ -2232,31 +2242,32 @@ class Truck {
                 );
             }
             
-            if ((correctedX || correctedZ) && body) {
-                // Calculate new world position
-                const worldX = this.position.x + newLocalX * cos - newLocalZ * sin;
-                const worldZ = this.position.z + newLocalX * sin + newLocalZ * cos;
-                const worldY = item.mesh.position.y;
-                
-                // === TELEPORT THE PHYSICS BODY ===
-                // For Havok dynamic bodies, we must:
-                // 1. Get current rotation
-                // 2. Dispose and recreate the physics aggregate at new position
-                // OR use transformNode directly
-                
-                // First, zero velocity to stop momentum
-                body.setLinearVelocity(BABYLON.Vector3.Zero());
-                body.setAngularVelocity(BABYLON.Vector3.Zero());
-                
-                // Move the mesh
-                item.mesh.position.x = worldX;
-                item.mesh.position.y = worldY;
-                item.mesh.position.z = worldZ;
-                
-                const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
-                this.teleportItemBody(item, body, new BABYLON.Vector3(worldX, worldY, worldZ), quat, performance.now());
-                
-                console.log(`📍 TELEPORTED: ${item.id || item.mesh.name} to local(${newLocalX.toFixed(2)}, ${newLocalZ.toFixed(2)})`);
+            if (correctedX || correctedZ) {
+                // First, zero velocity to stop momentum (if physics body exists)
+                if (body) {
+                    body.setLinearVelocity(BABYLON.Vector3.Zero());
+                    body.setAngularVelocity(BABYLON.Vector3.Zero());
+                }
+
+                if (item.isParented && item.mesh.parent === this.root) {
+                    // Parented item - set local position directly
+                    item.mesh.position.x = newLocalX;
+                    item.mesh.position.z = newLocalZ;
+                    // Y stays the same (localY)
+                } else {
+                    // Non-parented item - calculate and set world position
+                    const worldX = this.position.x + newLocalX * cos - newLocalZ * sin;
+                    const worldZ = this.position.z + newLocalX * sin + newLocalZ * cos;
+                    item.mesh.position.x = worldX;
+                    item.mesh.position.z = worldZ;
+
+                    if (body) {
+                        const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
+                        this.teleportItemBody(item, body, new BABYLON.Vector3(worldX, item.mesh.position.y, worldZ), quat, performance.now());
+                    }
+                }
+
+                console.log(`📍 CORRECTED: ${item.id || item.mesh.name} to local(${newLocalX.toFixed(2)}, ${newLocalZ.toFixed(2)})`);
             }
             
             // Mark as fallen if WAY outside bounds
