@@ -2202,13 +2202,28 @@ class Truck {
             item.localX = localX;
             item.localZ = localZ;
             item.localY = localY;
-            
+
+            // Skip wall breach correction for parented items - they have no physics
+            // and can't move on their own. Player placed them where they wanted.
+            if (item.isParented && item.mesh.parent === this.root) {
+                // Just check if fallen (way outside bounds)
+                const wayOutsideParented =
+                    Math.abs(localX) > outerHalfX + halfX ||
+                    localZ < outerFrontZ - halfZ ||
+                    localZ > outerBackZ + halfZ;
+                if (wayOutsideParented && !item.isFallen) {
+                    console.warn(`🚨 PARENTED ITEM OUTSIDE BOUNDS: ${item.id || item.mesh.name}`);
+                    item.isFallen = true;
+                }
+                continue; // Skip wall breach correction for parented items
+            }
+
             // body already defined above for velocity capping
             let correctedX = false;
             let correctedZ = false;
             let newLocalX = localX;
             let newLocalZ = localZ;
-            
+
             // Left wall check: item's left edge should not go past -wallInnerX
             const itemLeftEdge = localX - halfX;
             if (itemLeftEdge < -wallInnerX) {
@@ -2219,7 +2234,7 @@ class Truck {
                     `moving from ${localX.toFixed(2)} to ${newLocalX.toFixed(2)}`
                 );
             }
-            
+
             // Right wall check: item's right edge should not go past +wallInnerX
             const itemRightEdge = localX + halfX;
             if (itemRightEdge > wallInnerX) {
@@ -2230,7 +2245,7 @@ class Truck {
                     `moving from ${localX.toFixed(2)} to ${newLocalX.toFixed(2)}`
                 );
             }
-            
+
             // Front wall check: item's front edge should not go past wallInnerFrontZ
             const itemFrontEdge = localZ - halfZ;
             if (itemFrontEdge < wallInnerFrontZ) {
@@ -2241,7 +2256,7 @@ class Truck {
                     `moving from ${localZ.toFixed(2)} to ${newLocalZ.toFixed(2)}`
                 );
             }
-            
+
             if (correctedX || correctedZ) {
                 // First, zero velocity to stop momentum (if physics body exists)
                 if (body) {
