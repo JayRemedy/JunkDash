@@ -2,11 +2,12 @@
  * ItemManager - Handles spawning, managing, and tracking items
  */
 class ItemManager {
-    constructor(scene, sceneManager, truck, audioManager) {
+    constructor(scene, sceneManager, truck, audioManager, game) {
         this.scene = scene;
         this.sceneManager = sceneManager;
         this.truck = truck;
         this.audioManager = audioManager;
+        this.game = game; // Reference to main game for physics mode check
         
         this.itemDefinitions = [];
         this.placedItems = [];      // Items placed IN the truck
@@ -94,11 +95,9 @@ class ItemManager {
             invMatrix.invert();
             const worldVec = new BABYLON.Vector3(worldX, 0, worldZ);
             const localVec = BABYLON.Vector3.TransformCoordinates(worldVec, invMatrix);
-            console.log(`🔄 _worldToTruckLocalXZ: world=(${worldX.toFixed(2)}, ${worldZ.toFixed(2)}) → local=(${localVec.x.toFixed(2)}, ${localVec.z.toFixed(2)})`);
             return { x: localVec.x, z: localVec.z };
         }
         // Fallback
-        console.log(`🔄 _worldToTruckLocalXZ: FALLBACK (no truck.root)`);
         const dx = worldX - this.truck.position.x;
         const dz = worldZ - this.truck.position.z;
         return { x: dx, z: dz };
@@ -927,61 +926,95 @@ class ItemManager {
         mat.metallic = 0.1;
         mat.roughness = 0.8;
         mesh.material = mat;
-        
-        // === NEW APPROACH: Parent items to truck.root ===
-        // Items are children of truck.root and move automatically with the truck.
-        // No physics needed while items are in the truck - this prevents all impulse issues.
 
-        // DEBUG: Log world position before conversion
-        console.log(`📍 PLACE DEBUG: World input=(${placeX.toFixed(2)}, ${placeY.toFixed(2)}, ${placeZ.toFixed(2)})`);
-        console.log(`📍 PLACE DEBUG: Truck pos=(${this.truck.position.x.toFixed(2)}, ${this.truck.position.z.toFixed(2)}), rot=${(this.truck.rotation * 180 / Math.PI).toFixed(1)}°`);
-
-        // Convert world position to truck-local position using Babylon's matrix (accurate)
+        // Convert world position to truck-local position
         const local = this._worldToTruckLocalXZ(placeX, placeZ);
         const localX = local.x;
         const localZ = local.z;
         const localY = placeY + 0.02; // Small lift above floor
-
-        console.log(`📍 PLACE DEBUG: Converted local=(${localX.toFixed(2)}, ${localZ.toFixed(2)})`);
-        console.log(`📍 PLACE DEBUG: Cargo bounds: width=${this.truck.cargoWidth.toFixed(2)}, length=${this.truck.cargoLength.toFixed(2)}`);
-
-        // Item rotation relative to truck
         const localRotation = placeRotation - this.truck.rotation;
 
-        // PARENT FIRST, then set position (position becomes local coords after parenting)
-        mesh.parent = this.truck.root;
-        mesh.position = new BABYLON.Vector3(localX, localY, localZ);
-        mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(localRotation, 0, 0);
-
-        // Attach 3D model if available
-        this.attachModelIfAvailable(mesh, itemDef, { boxSize });
-
-        mesh.receiveShadows = true;
-        mesh.isPickable = true;
-        this.sceneManager.addShadowCaster(mesh);
-
-        console.log(`📦 PLACED ITEM ${itemDef.id} (PARENTED): Local=(${localX.toFixed(2)}, ${localY.toFixed(2)}, ${localZ.toFixed(2)})`);
-
         const nowMs = performance.now();
+        const physicsEnabled = this.game && this.game.physicsEnabled;
 
-        // Track placed item - NO PHYSICS needed while parented!
-        const placedItem = {
-            id: itemDef.id,
-            mesh: mesh,
-            size: boxSize,
-            weight: itemDef.weight,
-            volumeM3: itemDef.volumeM3,
-            isPlaced: true,
-            isFallen: false,
-            isParented: true, // Flag indicating item is parented to truck
-            localX: localX,
-            localY: localY,
-            localZ: localZ,
-            localRotation: localRotation
-        };
+        let placedItem;
+
+        if (physicsEnabled) {
+            // === PHYSICS MODE: Items use Havok physics ===
+            // Position in world space, don't parent to truck
+            mesh.position = new BABYLON.Vector3(placeX, placeY + 0.02, placeZ);
+            mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(placeRotation, 0, 0);
+
+            // Attach 3D model if available
+            this.attachModelIfAvailable(mesh, itemDef, { boxSize });
+
+            mesh.receiveShadows = true;
+            mesh.isPickable = true;
+            this.sceneManager.addShadowCaster(mesh);
+
+            console.log(`📦 PLACED ITEM ${itemDef.id} (PHYSICS): World=(${placeX.toFixed(2)}, ${placeY.toFixed(2)}, ${placeZ.toFixed(2)})`);
+
+            // Track placed item with physics
+            placedItem = {
+                id: itemDef.id,
+                mesh: mesh,
+                size: boxSize,
+                weight: itemDef.weight,
+                volumeM3: itemDef.volumeM3,
+                isPlaced: true,
+                isFallen: false,
+                isParented: false, // NOT parented - uses physics
+                localX: localX,
+                localY: localY,
+                localZ: localZ,
+                localRotation: localRotation,
+                // Schedule physics creation after settling
+                createPhysicsAt: nowMs + 100 // Create physics after 100ms
+            };
+
+            // Mark mesh for pending physics (will be created by truck.updateLoadedItems)
+            mesh._pendingPhysics = {
+                mass: Math.max(1, itemDef.weight || 10),
+                restitution: 0.1,
+                friction: 0.8
+            };
+
+        } else {
+            // === PARENTED MODE: Items are children of truck.root ===
+            // No physics needed - items move automatically with the truck
+            mesh.parent = this.truck.root;
+            mesh.position = new BABYLON.Vector3(localX, localY, localZ);
+            mesh.rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(localRotation, 0, 0);
+
+            // Attach 3D model if available
+            this.attachModelIfAvailable(mesh, itemDef, { boxSize });
+
+            mesh.receiveShadows = true;
+            mesh.isPickable = true;
+            this.sceneManager.addShadowCaster(mesh);
+
+            console.log(`📦 PLACED ITEM ${itemDef.id} (PARENTED): Local=(${localX.toFixed(2)}, ${localY.toFixed(2)}, ${localZ.toFixed(2)})`);
+
+            // Track placed item - NO PHYSICS needed while parented
+            placedItem = {
+                id: itemDef.id,
+                mesh: mesh,
+                size: boxSize,
+                weight: itemDef.weight,
+                volumeM3: itemDef.volumeM3,
+                isPlaced: true,
+                isFallen: false,
+                isParented: true, // Flag indicating item is parented to truck
+                localX: localX,
+                localY: localY,
+                localZ: localZ,
+                localRotation: localRotation
+            };
+        }
+
         this.placedItems.push(placedItem);
 
-        // Register with truck for tracking (but no physics management needed)
+        // Register with truck for tracking
         this.truck.addLoadedItem(placedItem);
         
         // Remove item from queue (mark as used)

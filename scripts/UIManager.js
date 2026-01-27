@@ -30,6 +30,8 @@ class UIManager {
             menuResume: document.getElementById('menu-resume'),
             menuRestart: document.getElementById('menu-restart'),
             menuQuit: document.getElementById('menu-quit'),
+            menuPhysics: document.getElementById('menu-physics'),
+            physicsStatus: document.getElementById('physics-status'),
             uiOverlay: document.getElementById('ui-overlay'),
             startScreen: document.getElementById('start-screen'),
             loadingScreen: document.getElementById('loading-screen'),
@@ -79,6 +81,7 @@ class UIManager {
         this.elements.menuResume?.addEventListener('click', () => { this.hideMenu(); this.game.resume(); });
         this.elements.menuRestart?.addEventListener('click', () => { this.hideMenu(); this.game.restartLevel(); });
         this.elements.menuQuit?.addEventListener('click', () => { this.hideMenu(); this.game.quit(); });
+        this.elements.menuPhysics?.addEventListener('click', () => { this.togglePhysicsMode(); });
         
         // Keyboard shortcut: M to toggle music
         window.addEventListener('keydown', (e) => {
@@ -499,6 +502,7 @@ class UIManager {
     showMenu() {
         this.modalBlocking = true;
         this.elements.menuModal?.classList.remove('hidden');
+        this.updatePhysicsStatus(); // Refresh physics toggle display
     }
     
     hideMenu() {
@@ -520,7 +524,18 @@ class UIManager {
             this.showMenu();
         }
     }
-    
+
+    togglePhysicsMode() {
+        const enabled = this.game.togglePhysics();
+        this.updatePhysicsStatus();
+    }
+
+    updatePhysicsStatus() {
+        if (this.elements.physicsStatus) {
+            this.elements.physicsStatus.textContent = this.game.physicsEnabled ? 'ON' : 'OFF';
+        }
+    }
+
     showPendingAction(action, message) {
         this.pendingMenuAction = action;
         

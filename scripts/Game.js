@@ -26,6 +26,9 @@ class Game {
         this.pickupRadius = 40; // Allow pickup without entering the block
         this.isAtPickup = true; // Start at pickup location
         
+        // Physics mode: when true, items use Havok physics; when false, items are parented to truck
+        this.physicsEnabled = false;
+
         // Systems
         this.audioManager = new AudioManager();
         this.sceneManager = null;
@@ -90,7 +93,7 @@ class Game {
             
             // Create item manager
             this.uiManager.updateLoadingProgress(70, 'Preparing items...');
-            this.itemManager = new ItemManager(this.scene, this.sceneManager, this.truck, this.audioManager);
+            this.itemManager = new ItemManager(this.scene, this.sceneManager, this.truck, this.audioManager, this);
             this.sceneManager.itemManager = this.itemManager; // Allow SceneManager to check if item is held
             await this.itemManager.preloadModels();
             
@@ -712,7 +715,13 @@ class Game {
         this.uiManager.updateLevel(this.currentLevel);
         this.resume();
     }
-    
+
+    togglePhysics() {
+        this.physicsEnabled = !this.physicsEnabled;
+        console.log(`🔧 Physics mode: ${this.physicsEnabled ? 'ENABLED (Havok)' : 'DISABLED (Parented)'}`);
+        return this.physicsEnabled;
+    }
+
     resetLevel() {
         this.itemManager.clearAll();
         this.truck.loadedItems = []; // Clear items from truck
