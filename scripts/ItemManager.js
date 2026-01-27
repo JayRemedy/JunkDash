@@ -94,9 +94,11 @@ class ItemManager {
             invMatrix.invert();
             const worldVec = new BABYLON.Vector3(worldX, 0, worldZ);
             const localVec = BABYLON.Vector3.TransformCoordinates(worldVec, invMatrix);
+            console.log(`🔄 _worldToTruckLocalXZ: world=(${worldX.toFixed(2)}, ${worldZ.toFixed(2)}) → local=(${localVec.x.toFixed(2)}, ${localVec.z.toFixed(2)})`);
             return { x: localVec.x, z: localVec.z };
         }
         // Fallback
+        console.log(`🔄 _worldToTruckLocalXZ: FALLBACK (no truck.root)`);
         const dx = worldX - this.truck.position.x;
         const dz = worldZ - this.truck.position.z;
         return { x: dx, z: dz };
@@ -930,11 +932,18 @@ class ItemManager {
         // Items are children of truck.root and move automatically with the truck.
         // No physics needed while items are in the truck - this prevents all impulse issues.
 
+        // DEBUG: Log world position before conversion
+        console.log(`📍 PLACE DEBUG: World input=(${placeX.toFixed(2)}, ${placeY.toFixed(2)}, ${placeZ.toFixed(2)})`);
+        console.log(`📍 PLACE DEBUG: Truck pos=(${this.truck.position.x.toFixed(2)}, ${this.truck.position.z.toFixed(2)}), rot=${(this.truck.rotation * 180 / Math.PI).toFixed(1)}°`);
+
         // Convert world position to truck-local position using Babylon's matrix (accurate)
         const local = this._worldToTruckLocalXZ(placeX, placeZ);
         const localX = local.x;
         const localZ = local.z;
         const localY = placeY + 0.02; // Small lift above floor
+
+        console.log(`📍 PLACE DEBUG: Converted local=(${localX.toFixed(2)}, ${localZ.toFixed(2)})`);
+        console.log(`📍 PLACE DEBUG: Cargo bounds: width=${this.truck.cargoWidth.toFixed(2)}, length=${this.truck.cargoLength.toFixed(2)}`);
 
         // Item rotation relative to truck
         const localRotation = placeRotation - this.truck.rotation;
