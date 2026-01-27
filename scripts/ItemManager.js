@@ -134,9 +134,8 @@ class ItemManager {
         const local = this._worldToTruckLocalXZ(worldX, worldZ);
         const { halfX, halfZ } = this._getHalfExtentsXZForRotation(boxSize, yawRel);
 
-        const wallMargin = 0.20; // Increased margin from walls to prevent physics collision
-        const itemMargin = Math.min(0.08, Math.min(boxSize.x, boxSize.y, boxSize.z) * 0.1);
-        const safety = wallMargin + itemMargin + 0.02;
+        // Minimal margin - item edge can touch walls (no physics collisions with parented items)
+        const safety = 0.02; // Just 2cm to prevent z-fighting
 
         const minX = -this.truck.cargoWidth / 2 + halfX + safety;
         const maxX = this.truck.cargoWidth / 2 - halfX - safety;
@@ -931,22 +930,14 @@ class ItemManager {
         // Items are children of truck.root and move automatically with the truck.
         // No physics needed while items are in the truck - this prevents all impulse issues.
 
-        // Convert world position to truck-local position
-        const truckX = this.truck.position.x;
-        const truckZ = this.truck.position.z;
-        const truckRot = this.truck.rotation;
-
-        // World to local conversion (inverse rotation)
-        const dx = placeX - truckX;
-        const dz = placeZ - truckZ;
-        const cos = Math.cos(truckRot);
-        const sin = Math.sin(truckRot);
-        const localX = dx * cos + dz * sin;
-        const localZ = -dx * sin + dz * cos;
+        // Convert world position to truck-local position using Babylon's matrix (accurate)
+        const local = this._worldToTruckLocalXZ(placeX, placeZ);
+        const localX = local.x;
+        const localZ = local.z;
         const localY = placeY + 0.02; // Small lift above floor
 
         // Item rotation relative to truck
-        const localRotation = placeRotation - truckRot;
+        const localRotation = placeRotation - this.truck.rotation;
 
         // PARENT FIRST, then set position (position becomes local coords after parenting)
         mesh.parent = this.truck.root;
@@ -1029,9 +1020,8 @@ class ItemManager {
         const { halfX, halfZ } = this._getHalfExtentsXZForRotation(boxSize, yawRel);
         const local = this._worldToTruckLocalXZ(pos.x, pos.z);
 
-        const wallMargin = 0.20; // Increased margin from walls to prevent physics collision
-        const itemMargin = Math.min(0.08, Math.min(boxSize.x, boxSize.y, boxSize.z) * 0.1);
-        const safety = wallMargin + itemMargin + 0.02;
+        // Minimal margin - item edge can touch walls (no physics collisions with parented items)
+        const safety = 0.02; // Just 2cm to prevent z-fighting
 
         const minX = -this.truck.cargoWidth / 2 + halfX + safety;
         const maxX = this.truck.cargoWidth / 2 - halfX - safety;
