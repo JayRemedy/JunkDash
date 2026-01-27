@@ -379,18 +379,28 @@ class Game {
         let newlyFallen = 0;
         this.itemManager.placedItems.forEach(item => {
             if (!item.isFallen && item.mesh) {
-                const pos = item.mesh.position;
                 const itemHalfHeight = item.size ? item.size.y / 2 : 0.3;
 
-                // Item bottom is below truck floor by more than 0.3m = fallen
-                const itemBottomY = pos.y - itemHalfHeight;
-                const fellBelowFloor = itemBottomY < floorY - 0.3;
+                // Get local coordinates - depends on whether item is parented
+                let localX, localZ, localY;
+                if (item.isParented && item.mesh.parent === this.truck.root) {
+                    // Item is parented - position IS local coordinates
+                    localX = item.mesh.position.x;
+                    localZ = item.mesh.position.z;
+                    localY = item.mesh.position.y;
+                } else {
+                    // Item is NOT parented - transform world to local
+                    const pos = item.mesh.position;
+                    const dx = pos.x - truckX;
+                    const dz = pos.z - truckZ;
+                    localX = dx * cos + dz * sin;
+                    localZ = -dx * sin + dz * cos;
+                    localY = pos.y;
+                }
 
-                // Transform item position to truck-local coordinates
-                const dx = pos.x - truckX;
-                const dz = pos.z - truckZ;
-                const localX = dx * cos + dz * sin;
-                const localZ = -dx * sin + dz * cos;
+                // Item bottom is below truck floor by more than 0.3m = fallen
+                const itemBottomY = localY - itemHalfHeight;
+                const fellBelowFloor = itemBottomY < floorY - 0.3;
 
                 // Check if outside truck cargo area in local coordinates (with margin)
                 const outsideX = Math.abs(localX) > halfW + 0.5;
@@ -402,6 +412,7 @@ class Game {
                 if (fellBelowFloor || outsideBounds) {
                     item.isFallen = true;
                     newlyFallen++;
+                    console.log(`❌ Item ${item.id} marked fallen: localX=${localX.toFixed(2)}, localZ=${localZ.toFixed(2)}, localY=${localY.toFixed(2)}, floorY=${floorY.toFixed(2)}, halfW=${halfW}, halfL=${halfL}, fellBelowFloor=${fellBelowFloor}, outsideBounds=${outsideBounds}`);
                 }
             }
         });

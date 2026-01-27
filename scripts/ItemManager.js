@@ -1163,6 +1163,12 @@ class ItemManager {
         const halfL = truck.cargoLength / 2;
         const floorY = truck.cargoFloorHeight + 0.05; // Slightly above cargo floor
 
+        // Calculate placement bounds (with safety margins)
+        // This matches _clampWorldPointToCargo logic
+        const placementSafety = 0.20 + 0.08 + 0.02; // wallMargin + itemMargin + extra
+        const placeHalfW = halfW - placementSafety;
+        const placeHalfL = halfL - placementSafety;
+
         // Store local offsets for manual position updates
         this._debugLocalOffsets = {
             floor: { x: 0, y: floorY, z: 0 },
@@ -1171,6 +1177,13 @@ class ItemManager {
                 { x:  halfW, y: floorY + 0.15, z: -halfL },
                 { x:  halfW, y: floorY + 0.15, z:  halfL },
                 { x: -halfW, y: floorY + 0.15, z:  halfL },
+            ],
+            // Inner placement bounds (orange markers)
+            placementCorners: [
+                { x: -placeHalfW, y: floorY + 0.2, z: -placeHalfL },
+                { x:  placeHalfW, y: floorY + 0.2, z: -placeHalfL },
+                { x:  placeHalfW, y: floorY + 0.2, z:  placeHalfL },
+                { x: -placeHalfW, y: floorY + 0.2, z:  placeHalfL },
             ],
             center: { x: 0, y: floorY + 0.3, z: 0 },
             arrow: { x: 0, y: floorY + 0.3, z: -halfL - 0.5 }
@@ -1190,7 +1203,7 @@ class ItemManager {
         this.debugFloorPlane.material = floorMat;
         this.debugFloorPlane.isPickable = false;
 
-        // === YELLOW CORNER MARKERS ===
+        // === YELLOW CORNER MARKERS (outer cargo bounds) ===
         this.debugCornerMarkers = [];
         const markerMat = new BABYLON.StandardMaterial('debugMarkerMat', this.scene);
         markerMat.emissiveColor = new BABYLON.Color3(1, 1, 0);
@@ -1200,6 +1213,18 @@ class ItemManager {
             marker.material = markerMat;
             marker.isPickable = false;
             this.debugCornerMarkers.push(marker);
+        }
+
+        // === ORANGE PLACEMENT MARKERS (inner placement bounds) ===
+        this.debugPlacementMarkers = [];
+        const placeMat = new BABYLON.StandardMaterial('debugPlaceMat', this.scene);
+        placeMat.emissiveColor = new BABYLON.Color3(1, 0.5, 0); // Orange
+
+        for (let i = 0; i < 4; i++) {
+            const marker = BABYLON.MeshBuilder.CreateSphere(`debugPlacement_${i}`, { diameter: 0.15 }, this.scene);
+            marker.material = placeMat;
+            marker.isPickable = false;
+            this.debugPlacementMarkers.push(marker);
         }
 
         // === RED CENTER MARKER ===
@@ -1279,6 +1304,14 @@ class ItemManager {
             this.debugForwardArrow.position.set(pos.x, pos.y, pos.z);
             this.debugForwardArrow.rotation.y = truckRot;
         }
+
+        // Update placement markers (inner bounds)
+        if (this.debugPlacementMarkers && this._debugLocalOffsets?.placementCorners) {
+            this.debugPlacementMarkers.forEach((marker, i) => {
+                const pos = toWorld(this._debugLocalOffsets.placementCorners[i]);
+                marker.position.set(pos.x, pos.y, pos.z);
+            });
+        }
     }
 
     // Clean up all debug meshes
@@ -1307,6 +1340,10 @@ class ItemManager {
         if (this.debugCornerMarkers) {
             this.debugCornerMarkers.forEach(m => m.dispose());
             this.debugCornerMarkers = [];
+        }
+        if (this.debugPlacementMarkers) {
+            this.debugPlacementMarkers.forEach(m => m.dispose());
+            this.debugPlacementMarkers = [];
         }
         if (this.debugTruckCenterMarker) {
             this.debugTruckCenterMarker.dispose();
