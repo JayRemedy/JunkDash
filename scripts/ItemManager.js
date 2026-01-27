@@ -723,49 +723,66 @@ class ItemManager {
     findPlacementY(x, z, itemHeight) {
         const bounds = this.truck.getBounds();
         const floorTop = this.truck.getFloorTopY();
-        
+
         // Check items in truck (includes fallen items with correct state)
         let highestSurfaceY = floorTop;
         const itemHalfW = 0.3; // Approximate half-width for overlap check
-        
+
+        // Convert input world coords to local for comparison with parented items
+        const inputLocal = this._worldToTruckLocalXZ(x, z);
+
         // Use truck.loadedItems which has the actual fallen state and positions
         const itemsToCheck = this.truck.loadedItems || this.placedItems;
-        
+
         for (const placed of itemsToCheck) {
             if (!placed.mesh) continue;
-            
-            const px = placed.mesh.position.x;
-            const pz = placed.mesh.position.z;
+
+            // For parented items, position is already local; for non-parented, convert to local
+            let px, pz;
+            if (placed.isParented && placed.mesh.parent === this.truck.root) {
+                px = placed.mesh.position.x;
+                pz = placed.mesh.position.z;
+            } else {
+                const placedLocal = this._worldToTruckLocalXZ(placed.mesh.position.x, placed.mesh.position.z);
+                px = placedLocal.x;
+                pz = placedLocal.z;
+            }
             
             // Check if placement point overlaps with this item's footprint
             let halfW, halfD, topY;
             
+            // For parented items, Y is local (relative to truck floor origin)
+            // Convert to world Y by adding truck root's world Y
+            const yOffset = (placed.isParented && placed.mesh.parent === this.truck.root)
+                ? this.truck.root.position.y
+                : 0;
+
             if (placed.isFallen && placed.fallDirection) {
                 // Fallen item - use rotated dimensions
                 const origHalfH = placed.size ? placed.size.y / 2 : 0.25;
                 const origHalfW = placed.size ? placed.size.x / 2 : 0.25;
                 const origHalfD = placed.size ? placed.size.z / 2 : 0.25;
-                
+
                 if (Math.abs(placed.fallDirection.x) > Math.abs(placed.fallDirection.z)) {
                     // Fell sideways - height becomes width
                     halfW = origHalfH;
                     halfD = origHalfD;
-                    topY = placed.mesh.position.y + origHalfW;
+                    topY = placed.mesh.position.y + yOffset + origHalfW;
                 } else {
                     // Fell forward/back - height becomes depth
                     halfW = origHalfW;
                     halfD = origHalfH;
-                    topY = placed.mesh.position.y + origHalfD;
+                    topY = placed.mesh.position.y + yOffset + origHalfD;
                 }
             } else {
                 // Standing item - use normal dimensions
                 halfW = placed.size ? placed.size.x / 2 : 0.25;
                 halfD = placed.size ? placed.size.z / 2 : 0.25;
-                topY = placed.mesh.position.y + (placed.size ? placed.size.y / 2 : 0.25);
+                topY = placed.mesh.position.y + yOffset + (placed.size ? placed.size.y / 2 : 0.25);
             }
             
-            // Check overlap
-            if (Math.abs(x - px) < halfW + itemHalfW && Math.abs(z - pz) < halfD + itemHalfW) {
+            // Check overlap using local coordinates
+            if (Math.abs(inputLocal.x - px) < halfW + itemHalfW && Math.abs(inputLocal.z - pz) < halfD + itemHalfW) {
                 if (topY > highestSurfaceY) {
                     highestSurfaceY = topY;
                 }
