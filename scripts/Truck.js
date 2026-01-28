@@ -2379,6 +2379,8 @@ class Truck {
         // Update all truck physics bodies to follow the truck
         if (!this.truckPhysicsAggregates) return;
         if (!this.root) return;
+        // Ensure the root's world matrix is up to date before transforming local offsets.
+        this.root.computeWorldMatrix(true);
         
         // Cache rotation quaternion - use same rotation as visual truck
         // Note: Position calc uses -rotation, but quaternion should match visual truck directly
