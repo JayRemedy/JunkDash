@@ -1955,6 +1955,22 @@ class Truck {
             } else if (item.lockLateralUntil && (itemsNowMs >= item.lockLateralUntil || isTruckMoving)) {
                 item.lockLateralUntil = 0;
             }
+
+            // When the truck is moving, gently damp relative horizontal velocity so
+            // items ride with the truck instead of lagging and slamming into walls.
+            if (isTruckMoving && body && body.getLinearVelocity && body.setLinearVelocity) {
+                const vel = body.getLinearVelocity();
+                if (vel) {
+                    const relDamping = Math.max(0, 1 - dt * 6); // Reduce relative drift quickly when moving
+                    const relX = vel.x - truckVelX;
+                    const relZ = vel.z - truckVelZ;
+                    const newVelX = truckVelX + relX * relDamping;
+                    const newVelZ = truckVelZ + relZ * relDamping;
+                    if (newVelX !== vel.x || newVelZ !== vel.z) {
+                        body.setLinearVelocity(new BABYLON.Vector3(newVelX, vel.y, newVelZ));
+                    }
+                }
+            }
             
             // Update local position tracking
             if (item.mesh.physicsAggregate) {
