@@ -2507,7 +2507,7 @@ class Truck {
             const frontWallThickness = 2.0; // 2m thick front wall
             
             // Floor - extends full length, items can roll off the back naturally
-            const backGap = 0.3; // Small gap at back for open truck bed
+            const backGap = 0.0; // Keep full floor length; open back is handled by lack of wall
             const floorDepth = this.cargoLength - backGap;
             this.physicsWallConfig = {
                 wallHeight,
