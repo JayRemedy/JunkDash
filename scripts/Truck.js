@@ -534,7 +534,7 @@ class Truck {
             truckMat.alpha = 0.6;
             truckMat.emissiveColor = new BABYLON.Color3(0, 0.5, 0);
             this.truckDebugBox.material = truckMat;
-            this.truckDebugBox.parent = this.container;
+            this.truckDebugBox.parent = this.root;
         }
         
         this.houseDebugBoxes = [];
