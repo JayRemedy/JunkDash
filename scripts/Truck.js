@@ -2463,7 +2463,7 @@ class Truck {
             }
             mesh.rotationQuaternion.copyFrom(this._physicsRotQuat);
             
-            // IMPORTANT: For animated bodies, we must set the target transform
+            // IMPORTANT: For moving bodies, we must set the target transform
             // on the physics body, not just update the mesh
             this._physicsTargetPos.set(worldVec.x, worldVec.y, worldVec.z);
             aggregate.body.setTargetTransform(this._physicsTargetPos, this._physicsRotQuat);
@@ -2596,10 +2596,10 @@ class Truck {
                     this.scene
                 );
             
-                // Use ANIMATED bodies for moving truck walls/floor so Havok
-                // treats them as driven collision geometry.
+                // Use KINEMATIC bodies for moving truck walls to avoid
+                // injecting large impulses into dynamic cargo items.
                 if (aggregate.body && aggregate.body.setMotionType) {
-                    aggregate.body.setMotionType(BABYLON.PhysicsMotionType.ANIMATED);
+                    aggregate.body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
                 }
                 
                 // CRITICAL: Use larger collision margin for walls to create buffer zone
