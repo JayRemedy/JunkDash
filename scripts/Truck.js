@@ -1981,40 +1981,15 @@ class Truck {
                     }
                 }
             }
-
-            // If the item is safely inside the bed while moving, lock it to the
-            // truck's horizontal velocity to prevent runaway impulses.
-            if (isTruckMoving && body && body.getLinearVelocity && body.setLinearVelocity) {
-                const halfX = item.size ? item.size.x / 2 : 0.3;
-                const halfZ = item.size ? item.size.z / 2 : 0.3;
-                const availableHalfWidth = Math.max(0, this.cargoWidth / 2 - halfX);
-                const safeMarginX = Math.max(0.01, availableHalfWidth - 0.05);
-                const frontLimit = -this.cargoLength / 2 + halfZ + 0.05;
-                const backLimit = this.cargoLength / 2 - halfZ - 0.05;
-                const safeZMin = Math.min(frontLimit, backLimit);
-                const safeZMax = Math.max(frontLimit, backLimit);
-                if (Math.abs(localX) <= safeMarginX && localZ >= safeZMin && localZ <= safeZMax) {
-                    const vel = body.getLinearVelocity();
-                    if (vel) {
-                        body.setLinearVelocity(new BABYLON.Vector3(truckVelX, vel.y, truckVelZ));
-                    }
-                    if (body.getAngularVelocity && body.setAngularVelocity) {
-                        body.setAngularVelocity(BABYLON.Vector3.Zero());
-                    }
-                }
-            }
             
             // If truck is moving and item is safely inside, lock it to the truck using kinematic mode.
             if (body && body.setMotionType) {
                 const halfX = item.size ? item.size.x / 2 : 0.3;
                 const halfZ = item.size ? item.size.z / 2 : 0.3;
-                const availableHalfWidth = Math.max(0, this.cargoWidth / 2 - halfX);
-                const safeMarginX = Math.max(0.01, availableHalfWidth - 0.05);
-                const frontLimit = -this.cargoLength / 2 + halfZ + 0.05;
-                const backLimit = this.cargoLength / 2 - halfZ - 0.05;
-                const safeZMin = Math.min(frontLimit, backLimit);
-                const safeZMax = Math.max(frontLimit, backLimit);
-                const isSafeInside = Math.abs(localX) <= safeMarginX && localZ >= safeZMin && localZ <= safeZMax;
+                const marginX = this.cargoWidth / 2 - halfX - 0.15;
+                const marginFront = -this.cargoLength / 2 + halfZ + 0.2;
+                const marginBack = this.cargoLength / 2 - halfZ - 0.3;
+                const isSafeInside = Math.abs(localX) < marginX && localZ > marginFront && localZ < marginBack;
 
                 if (isTruckMoving && isSafeInside) {
                     if (!item._moveLocked) {
