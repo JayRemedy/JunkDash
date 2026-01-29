@@ -534,7 +534,7 @@ class Truck {
             truckMat.alpha = 0.6;
             truckMat.emissiveColor = new BABYLON.Color3(0, 0.5, 0);
             this.truckDebugBox.material = truckMat;
-            this.truckDebugBox.parent = this.container;
+            this.truckDebugBox.parent = this.root;
         }
         
         this.houseDebugBoxes = [];
@@ -608,37 +608,98 @@ class Truck {
     // Debug: toggle visibility of physics walls (press '9' in game)
     togglePhysicsWallsDebug() {
         this.physicsWallsVisible = !this.physicsWallsVisible;
-        
-        const meshes = [
+
+        if (!this.physicsWallConfig) {
+            console.warn('🔧 Physics wall config missing; cannot show debug meshes.');
+            return this.physicsWallsVisible;
+        }
+
+        const physicsMeshes = [
             this.truckFloorMesh,
             this.truckLeftWallMesh,
             this.truckRightWallMesh,
             this.truckFrontWallMesh
         ];
-        
-        meshes.forEach(mesh => {
+        physicsMeshes.forEach(mesh => {
             if (mesh) {
-                mesh.isVisible = this.physicsWallsVisible;
-                if (this.physicsWallsVisible && !mesh.material) {
-                    const mat = new BABYLON.StandardMaterial('physicsDebugMat', this.scene);
-                    mat.diffuseColor = new BABYLON.Color3(1, 0, 0);
-                    mat.alpha = 0.3;
-                    mat.wireframe = true;
-                    mesh.material = mat;
-                }
+                mesh.isVisible = false;
             }
         });
-        
-        console.log(`🔧 Physics walls visibility: ${this.physicsWallsVisible ? 'ON' : 'OFF'}`);
+
         if (this.physicsWallsVisible) {
-            console.log('Physics wall positions (local):',
-                `Floor: y=${this.truckFloorMesh?.position.y.toFixed(2)}`,
-                `Left: x=${this.truckLeftWallMesh?.position.x.toFixed(2)}`,
-                `Right: x=${this.truckRightWallMesh?.position.x.toFixed(2)}`,
-                `Front: z=${this.truckFrontWallMesh?.position.z.toFixed(2)}`
+            if (!this._physicsDebugMat) {
+                const mat = new BABYLON.StandardMaterial('physicsDebugMat', this.scene);
+                mat.diffuseColor = new BABYLON.Color3(1, 0, 0);
+                mat.alpha = 0.3;
+                mat.wireframe = true;
+                this._physicsDebugMat = mat;
+            }
+
+            if (this.physicsDebugMeshes) {
+                this.physicsDebugMeshes.forEach(mesh => mesh.dispose());
+            }
+
+            const { wallHeight, sideWallThickness, frontWallThickness, backGap, floorDepth } = this.physicsWallConfig;
+
+            const debugFloor = BABYLON.MeshBuilder.CreateBox('debugPhysicsFloor', {
+                width: this.cargoWidth + 0.2,
+                height: 0.2,
+                depth: floorDepth
+            }, this.scene);
+            debugFloor.position.set(0, this.floorTopY - 0.12, -backGap / 2);
+            debugFloor.material = this._physicsDebugMat;
+            debugFloor.isPickable = false;
+            debugFloor.parent = this.root;
+
+            const debugLeft = BABYLON.MeshBuilder.CreateBox('debugPhysicsLeftWall', {
+                width: sideWallThickness,
+                height: wallHeight,
+                depth: this.cargoLength
+            }, this.scene);
+            debugLeft.position.set(
+                -this.cargoWidth / 2 - sideWallThickness / 2,
+                this.floorTopY + wallHeight / 2 - 0.5,
+                0
             );
+            debugLeft.material = this._physicsDebugMat;
+            debugLeft.isPickable = false;
+            debugLeft.parent = this.root;
+
+            const debugRight = BABYLON.MeshBuilder.CreateBox('debugPhysicsRightWall', {
+                width: sideWallThickness,
+                height: wallHeight,
+                depth: this.cargoLength
+            }, this.scene);
+            debugRight.position.set(
+                this.cargoWidth / 2 + sideWallThickness / 2,
+                this.floorTopY + wallHeight / 2 - 0.5,
+                0
+            );
+            debugRight.material = this._physicsDebugMat;
+            debugRight.isPickable = false;
+            debugRight.parent = this.root;
+
+            const debugFront = BABYLON.MeshBuilder.CreateBox('debugPhysicsFrontWall', {
+                width: this.cargoWidth + sideWallThickness * 2,
+                height: wallHeight,
+                depth: frontWallThickness
+            }, this.scene);
+            debugFront.position.set(
+                0,
+                this.floorTopY + wallHeight / 2 - 0.5,
+                -this.cargoLength / 2 - frontWallThickness / 2
+            );
+            debugFront.material = this._physicsDebugMat;
+            debugFront.isPickable = false;
+            debugFront.parent = this.root;
+
+            this.physicsDebugMeshes = [debugFloor, debugLeft, debugRight, debugFront];
+        } else if (this.physicsDebugMeshes) {
+            this.physicsDebugMeshes.forEach(mesh => mesh.dispose());
+            this.physicsDebugMeshes = null;
         }
-        
+
+        console.log(`🔧 Physics walls visibility: ${this.physicsWallsVisible ? 'ON' : 'OFF'}`);
         return this.physicsWallsVisible;
     }
     
@@ -1688,17 +1749,27 @@ class Truck {
                 );
                 const halfX = item.size ? item.size.x / 2 : 0.3;
                 const halfZ = item.size ? item.size.z / 2 : 0.3;
-                const margin = 0.15; // Safety margin from walls
+                const availableHalfWidth = Math.max(0, this.cargoWidth / 2 - halfX);
+                const availableHalfLength = Math.max(0, this.cargoLength / 2 - halfZ);
+                const marginX = Math.min(0.08, availableHalfWidth * 0.5);
+                const marginZ = Math.min(0.08, availableHalfLength * 0.5);
 
-                const maxX = this.cargoWidth / 2 - halfX - margin;
-                const minZ = -this.cargoLength / 2 + halfZ + margin;
+                const maxX = Math.max(0, this.cargoWidth / 2 - halfX - marginX);
+                const minZ = Math.min(0, -this.cargoLength / 2 + halfZ + marginZ);
 
                 let needsAdjust = false;
                 let safeLocalX = itemLocalVec.x;
                 let safeLocalZ = itemLocalVec.z;
 
-                if (safeLocalX < -maxX) { safeLocalX = -maxX; needsAdjust = true; }
-                if (safeLocalX > maxX) { safeLocalX = maxX; needsAdjust = true; }
+                if (maxX === 0) {
+                    if (safeLocalX !== 0) {
+                        safeLocalX = 0;
+                        needsAdjust = true;
+                    }
+                } else {
+                    if (safeLocalX < -maxX) { safeLocalX = -maxX; needsAdjust = true; }
+                    if (safeLocalX > maxX) { safeLocalX = maxX; needsAdjust = true; }
+                }
                 if (safeLocalZ < minZ) { safeLocalZ = minZ; needsAdjust = true; }
 
                 if (needsAdjust) {
@@ -1894,7 +1965,80 @@ class Truck {
             } else if (item.lockLateralUntil && (itemsNowMs >= item.lockLateralUntil || isTruckMoving)) {
                 item.lockLateralUntil = 0;
             }
+
+            // When the truck is moving, gently damp relative horizontal velocity so
+            // items ride with the truck instead of lagging and slamming into walls.
+            if (isTruckMoving && body && body.getLinearVelocity && body.setLinearVelocity) {
+                const vel = body.getLinearVelocity();
+                if (vel) {
+                    const relDamping = Math.max(0, 1 - dt * 6); // Reduce relative drift quickly when moving
+                    const relX = vel.x - truckVelX;
+                    const relZ = vel.z - truckVelZ;
+                    const newVelX = truckVelX + relX * relDamping;
+                    const newVelZ = truckVelZ + relZ * relDamping;
+                    if (newVelX !== vel.x || newVelZ !== vel.z) {
+                        body.setLinearVelocity(new BABYLON.Vector3(newVelX, vel.y, newVelZ));
+                    }
+                }
+            }
+
+            // If the item is safely inside the bed while moving, lock it to the
+            // truck's horizontal velocity to prevent runaway impulses.
+            if (isTruckMoving && body && body.getLinearVelocity && body.setLinearVelocity) {
+                const halfX = item.size ? item.size.x / 2 : 0.3;
+                const halfZ = item.size ? item.size.z / 2 : 0.3;
+                const availableHalfWidth = Math.max(0, this.cargoWidth / 2 - halfX);
+                const safeMarginX = Math.max(0.01, availableHalfWidth - 0.05);
+                const frontLimit = -this.cargoLength / 2 + halfZ + 0.05;
+                const backLimit = this.cargoLength / 2 - halfZ - 0.05;
+                const safeZMin = Math.min(frontLimit, backLimit);
+                const safeZMax = Math.max(frontLimit, backLimit);
+                if (Math.abs(localX) <= safeMarginX && localZ >= safeZMin && localZ <= safeZMax) {
+                    const vel = body.getLinearVelocity();
+                    if (vel) {
+                        body.setLinearVelocity(new BABYLON.Vector3(truckVelX, vel.y, truckVelZ));
+                    }
+                    if (body.getAngularVelocity && body.setAngularVelocity) {
+                        body.setAngularVelocity(BABYLON.Vector3.Zero());
+                    }
+                }
+            }
             
+            // If truck is moving and item is safely inside, lock it to the truck using kinematic mode.
+            if (body && body.setMotionType) {
+                const halfX = item.size ? item.size.x / 2 : 0.3;
+                const halfZ = item.size ? item.size.z / 2 : 0.3;
+                const availableHalfWidth = Math.max(0, this.cargoWidth / 2 - halfX);
+                const safeMarginX = Math.max(0.01, availableHalfWidth - 0.05);
+                const frontLimit = -this.cargoLength / 2 + halfZ + 0.05;
+                const backLimit = this.cargoLength / 2 - halfZ - 0.05;
+                const safeZMin = Math.min(frontLimit, backLimit);
+                const safeZMax = Math.max(frontLimit, backLimit);
+                const isSafeInside = Math.abs(localX) <= safeMarginX && localZ >= safeZMin && localZ <= safeZMax;
+
+                if (isTruckMoving && isSafeInside) {
+                    if (!item._moveLocked) {
+                        item._moveLocked = true;
+                        item._moveLockRestore = body.getMotionType ? body.getMotionType() : BABYLON.PhysicsMotionType.DYNAMIC;
+                        body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
+                    }
+                    if (body.setLinearVelocity) body.setLinearVelocity(BABYLON.Vector3.Zero());
+                    if (body.setAngularVelocity) body.setAngularVelocity(BABYLON.Vector3.Zero());
+                    if (body.setTargetTransform) {
+                        const localVec = new BABYLON.Vector3(item.localX ?? localX, item.mesh.position.y, item.localZ ?? localZ);
+                        const targetPos = BABYLON.Vector3.TransformCoordinates(localVec, worldMatrix);
+                        const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
+                        body.setTargetTransform(targetPos, quat);
+                    }
+                } else if (item._moveLocked) {
+                    item._moveLocked = false;
+                    const restoreType = item._moveLockRestore ?? BABYLON.PhysicsMotionType.DYNAMIC;
+                    body.setMotionType(restoreType);
+                    if (body.setLinearVelocity) body.setLinearVelocity(BABYLON.Vector3.Zero());
+                    if (body.setAngularVelocity) body.setAngularVelocity(BABYLON.Vector3.Zero());
+                }
+            }
+
             // Update local position tracking
             if (item.mesh.physicsAggregate) {
                 item.localX = localX;
@@ -1907,15 +2051,22 @@ class Truck {
             // This is a last-resort failsafe - item cannot escape no matter what
             const halfX = item.size ? item.size.x / 2 : 0.3;
             const halfZ = item.size ? item.size.z / 2 : 0.3;
-            const maxLocalX = this.cargoWidth / 2 - halfX - 0.05;
-            const minLocalZ = -this.cargoLength / 2 + halfZ + 0.05;
+            const maxLocalX = Math.max(0, this.cargoWidth / 2 - halfX - 0.05);
+            const minLocalZ = Math.min(0, -this.cargoLength / 2 + halfZ + 0.05);
             
             let needsClamp = false;
             let clampedLocalX = localX;
             let clampedLocalZ = localZ;
             
-            if (localX < -maxLocalX) { clampedLocalX = -maxLocalX; needsClamp = true; }
-            if (localX > maxLocalX) { clampedLocalX = maxLocalX; needsClamp = true; }
+            if (maxLocalX === 0) {
+                if (localX !== 0) {
+                    clampedLocalX = 0;
+                    needsClamp = true;
+                }
+            } else {
+                if (localX < -maxLocalX) { clampedLocalX = -maxLocalX; needsClamp = true; }
+                if (localX > maxLocalX) { clampedLocalX = maxLocalX; needsClamp = true; }
+            }
             if (localZ < minLocalZ) { clampedLocalZ = minLocalZ; needsClamp = true; }
             // Back is open - don't clamp positive Z
             
@@ -2379,6 +2530,8 @@ class Truck {
         // Update all truck physics bodies to follow the truck
         if (!this.truckPhysicsAggregates) return;
         if (!this.root) return;
+        // Ensure the root's world matrix is up to date before transforming local offsets.
+        this.root.computeWorldMatrix(true);
         
         // Cache rotation quaternion - use same rotation as visual truck
         // Note: Position calc uses -rotation, but quaternion should match visual truck directly
@@ -2444,8 +2597,15 @@ class Truck {
             const frontWallThickness = 2.0; // 2m thick front wall
             
             // Floor - extends full length, items can roll off the back naturally
-            const backGap = 0.3; // Small gap at back for open truck bed
+            const backGap = 0.0; // Keep full floor length; open back is handled by lack of wall
             const floorDepth = this.cargoLength - backGap;
+            this.physicsWallConfig = {
+                wallHeight,
+                sideWallThickness,
+                frontWallThickness,
+                backGap,
+                floorDepth
+            };
             this.truckFloorMesh = BABYLON.MeshBuilder.CreateBox('truckPhysicsFloor', {
                 width: this.cargoWidth + 0.2,  // Slightly wider than cargo for edge grip
                 height: 0.2,
