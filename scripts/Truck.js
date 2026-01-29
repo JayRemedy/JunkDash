@@ -1749,17 +1749,27 @@ class Truck {
                 );
                 const halfX = item.size ? item.size.x / 2 : 0.3;
                 const halfZ = item.size ? item.size.z / 2 : 0.3;
-                const margin = 0.15; // Safety margin from walls
+                const availableHalfWidth = Math.max(0, this.cargoWidth / 2 - halfX);
+                const availableHalfLength = Math.max(0, this.cargoLength / 2 - halfZ);
+                const marginX = Math.min(0.08, availableHalfWidth * 0.5);
+                const marginZ = Math.min(0.08, availableHalfLength * 0.5);
 
-                const maxX = this.cargoWidth / 2 - halfX - margin;
-                const minZ = -this.cargoLength / 2 + halfZ + margin;
+                const maxX = Math.max(0, this.cargoWidth / 2 - halfX - marginX);
+                const minZ = Math.min(0, -this.cargoLength / 2 + halfZ + marginZ);
 
                 let needsAdjust = false;
                 let safeLocalX = itemLocalVec.x;
                 let safeLocalZ = itemLocalVec.z;
 
-                if (safeLocalX < -maxX) { safeLocalX = -maxX; needsAdjust = true; }
-                if (safeLocalX > maxX) { safeLocalX = maxX; needsAdjust = true; }
+                if (maxX === 0) {
+                    if (safeLocalX !== 0) {
+                        safeLocalX = 0;
+                        needsAdjust = true;
+                    }
+                } else {
+                    if (safeLocalX < -maxX) { safeLocalX = -maxX; needsAdjust = true; }
+                    if (safeLocalX > maxX) { safeLocalX = maxX; needsAdjust = true; }
+                }
                 if (safeLocalZ < minZ) { safeLocalZ = minZ; needsAdjust = true; }
 
                 if (needsAdjust) {
@@ -2016,15 +2026,22 @@ class Truck {
             // This is a last-resort failsafe - item cannot escape no matter what
             const halfX = item.size ? item.size.x / 2 : 0.3;
             const halfZ = item.size ? item.size.z / 2 : 0.3;
-            const maxLocalX = this.cargoWidth / 2 - halfX - 0.05;
-            const minLocalZ = -this.cargoLength / 2 + halfZ + 0.05;
+            const maxLocalX = Math.max(0, this.cargoWidth / 2 - halfX - 0.05);
+            const minLocalZ = Math.min(0, -this.cargoLength / 2 + halfZ + 0.05);
             
             let needsClamp = false;
             let clampedLocalX = localX;
             let clampedLocalZ = localZ;
             
-            if (localX < -maxLocalX) { clampedLocalX = -maxLocalX; needsClamp = true; }
-            if (localX > maxLocalX) { clampedLocalX = maxLocalX; needsClamp = true; }
+            if (maxLocalX === 0) {
+                if (localX !== 0) {
+                    clampedLocalX = 0;
+                    needsClamp = true;
+                }
+            } else {
+                if (localX < -maxLocalX) { clampedLocalX = -maxLocalX; needsClamp = true; }
+                if (localX > maxLocalX) { clampedLocalX = maxLocalX; needsClamp = true; }
+            }
             if (localZ < minLocalZ) { clampedLocalZ = minLocalZ; needsClamp = true; }
             // Back is open - don't clamp positive Z
             
