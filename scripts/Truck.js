@@ -1971,25 +1971,6 @@ class Truck {
                     }
                 }
             }
-
-            // If the item is safely inside the bed while moving, lock it to the
-            // truck's horizontal velocity to prevent runaway impulses.
-            if (isTruckMoving && body && body.getLinearVelocity && body.setLinearVelocity) {
-                const halfX = item.size ? item.size.x / 2 : 0.3;
-                const halfZ = item.size ? item.size.z / 2 : 0.3;
-                const marginX = this.cargoWidth / 2 - halfX - 0.15;
-                const marginFront = -this.cargoLength / 2 + halfZ + 0.2;
-                const marginBack = this.cargoLength / 2 - halfZ - 0.3;
-                if (Math.abs(localX) < marginX && localZ > marginFront && localZ < marginBack) {
-                    const vel = body.getLinearVelocity();
-                    if (vel) {
-                        body.setLinearVelocity(new BABYLON.Vector3(truckVelX, vel.y, truckVelZ));
-                    }
-                    if (body.getAngularVelocity && body.setAngularVelocity) {
-                        body.setAngularVelocity(BABYLON.Vector3.Zero());
-                    }
-                }
-            }
             
             // If truck is moving and item is safely inside, lock it to the truck using kinematic mode.
             if (body && body.setMotionType) {
