@@ -1972,6 +1972,38 @@ class Truck {
                 }
             }
             
+            // If truck is moving and item is safely inside, lock it to the truck using kinematic mode.
+            if (body && body.setMotionType) {
+                const halfX = item.size ? item.size.x / 2 : 0.3;
+                const halfZ = item.size ? item.size.z / 2 : 0.3;
+                const marginX = this.cargoWidth / 2 - halfX - 0.15;
+                const marginFront = -this.cargoLength / 2 + halfZ + 0.2;
+                const marginBack = this.cargoLength / 2 - halfZ - 0.3;
+                const isSafeInside = Math.abs(localX) < marginX && localZ > marginFront && localZ < marginBack;
+
+                if (isTruckMoving && isSafeInside) {
+                    if (!item._moveLocked) {
+                        item._moveLocked = true;
+                        item._moveLockRestore = body.getMotionType ? body.getMotionType() : BABYLON.PhysicsMotionType.DYNAMIC;
+                        body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
+                    }
+                    if (body.setLinearVelocity) body.setLinearVelocity(BABYLON.Vector3.Zero());
+                    if (body.setAngularVelocity) body.setAngularVelocity(BABYLON.Vector3.Zero());
+                    if (body.setTargetTransform) {
+                        const localVec = new BABYLON.Vector3(item.localX ?? localX, item.mesh.position.y, item.localZ ?? localZ);
+                        const targetPos = BABYLON.Vector3.TransformCoordinates(localVec, worldMatrix);
+                        const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
+                        body.setTargetTransform(targetPos, quat);
+                    }
+                } else if (item._moveLocked) {
+                    item._moveLocked = false;
+                    const restoreType = item._moveLockRestore ?? BABYLON.PhysicsMotionType.DYNAMIC;
+                    body.setMotionType(restoreType);
+                    if (body.setLinearVelocity) body.setLinearVelocity(BABYLON.Vector3.Zero());
+                    if (body.setAngularVelocity) body.setAngularVelocity(BABYLON.Vector3.Zero());
+                }
+            }
+
             // Update local position tracking
             if (item.mesh.physicsAggregate) {
                 item.localX = localX;
