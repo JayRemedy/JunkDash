@@ -608,37 +608,98 @@ class Truck {
     // Debug: toggle visibility of physics walls (press '9' in game)
     togglePhysicsWallsDebug() {
         this.physicsWallsVisible = !this.physicsWallsVisible;
-        
-        const meshes = [
+
+        if (!this.physicsWallConfig) {
+            console.warn('🔧 Physics wall config missing; cannot show debug meshes.');
+            return this.physicsWallsVisible;
+        }
+
+        const physicsMeshes = [
             this.truckFloorMesh,
             this.truckLeftWallMesh,
             this.truckRightWallMesh,
             this.truckFrontWallMesh
         ];
-        
-        meshes.forEach(mesh => {
+        physicsMeshes.forEach(mesh => {
             if (mesh) {
-                mesh.isVisible = this.physicsWallsVisible;
-                if (this.physicsWallsVisible && !mesh.material) {
-                    const mat = new BABYLON.StandardMaterial('physicsDebugMat', this.scene);
-                    mat.diffuseColor = new BABYLON.Color3(1, 0, 0);
-                    mat.alpha = 0.3;
-                    mat.wireframe = true;
-                    mesh.material = mat;
-                }
+                mesh.isVisible = false;
             }
         });
-        
-        console.log(`🔧 Physics walls visibility: ${this.physicsWallsVisible ? 'ON' : 'OFF'}`);
+
         if (this.physicsWallsVisible) {
-            console.log('Physics wall positions (local):',
-                `Floor: y=${this.truckFloorMesh?.position.y.toFixed(2)}`,
-                `Left: x=${this.truckLeftWallMesh?.position.x.toFixed(2)}`,
-                `Right: x=${this.truckRightWallMesh?.position.x.toFixed(2)}`,
-                `Front: z=${this.truckFrontWallMesh?.position.z.toFixed(2)}`
+            if (!this._physicsDebugMat) {
+                const mat = new BABYLON.StandardMaterial('physicsDebugMat', this.scene);
+                mat.diffuseColor = new BABYLON.Color3(1, 0, 0);
+                mat.alpha = 0.3;
+                mat.wireframe = true;
+                this._physicsDebugMat = mat;
+            }
+
+            if (this.physicsDebugMeshes) {
+                this.physicsDebugMeshes.forEach(mesh => mesh.dispose());
+            }
+
+            const { wallHeight, sideWallThickness, frontWallThickness, backGap, floorDepth } = this.physicsWallConfig;
+
+            const debugFloor = BABYLON.MeshBuilder.CreateBox('debugPhysicsFloor', {
+                width: this.cargoWidth + 0.2,
+                height: 0.2,
+                depth: floorDepth
+            }, this.scene);
+            debugFloor.position.set(0, this.floorTopY - 0.12, -backGap / 2);
+            debugFloor.material = this._physicsDebugMat;
+            debugFloor.isPickable = false;
+            debugFloor.parent = this.root;
+
+            const debugLeft = BABYLON.MeshBuilder.CreateBox('debugPhysicsLeftWall', {
+                width: sideWallThickness,
+                height: wallHeight,
+                depth: this.cargoLength
+            }, this.scene);
+            debugLeft.position.set(
+                -this.cargoWidth / 2 - sideWallThickness / 2,
+                this.floorTopY + wallHeight / 2 - 0.5,
+                0
             );
+            debugLeft.material = this._physicsDebugMat;
+            debugLeft.isPickable = false;
+            debugLeft.parent = this.root;
+
+            const debugRight = BABYLON.MeshBuilder.CreateBox('debugPhysicsRightWall', {
+                width: sideWallThickness,
+                height: wallHeight,
+                depth: this.cargoLength
+            }, this.scene);
+            debugRight.position.set(
+                this.cargoWidth / 2 + sideWallThickness / 2,
+                this.floorTopY + wallHeight / 2 - 0.5,
+                0
+            );
+            debugRight.material = this._physicsDebugMat;
+            debugRight.isPickable = false;
+            debugRight.parent = this.root;
+
+            const debugFront = BABYLON.MeshBuilder.CreateBox('debugPhysicsFrontWall', {
+                width: this.cargoWidth + sideWallThickness * 2,
+                height: wallHeight,
+                depth: frontWallThickness
+            }, this.scene);
+            debugFront.position.set(
+                0,
+                this.floorTopY + wallHeight / 2 - 0.5,
+                -this.cargoLength / 2 - frontWallThickness / 2
+            );
+            debugFront.material = this._physicsDebugMat;
+            debugFront.isPickable = false;
+            debugFront.parent = this.root;
+
+            this.physicsDebugMeshes = [debugFloor, debugLeft, debugRight, debugFront];
+        } else if (this.physicsDebugMeshes) {
+            this.physicsDebugMeshes.forEach(mesh => mesh.dispose());
+            this.physicsDebugMeshes = null;
         }
-        
+
+        console.log(`🔧 Physics walls visibility: ${this.physicsWallsVisible ? 'ON' : 'OFF'}`);
         return this.physicsWallsVisible;
     }
     
@@ -2448,6 +2509,13 @@ class Truck {
             // Floor - extends full length, items can roll off the back naturally
             const backGap = 0.3; // Small gap at back for open truck bed
             const floorDepth = this.cargoLength - backGap;
+            this.physicsWallConfig = {
+                wallHeight,
+                sideWallThickness,
+                frontWallThickness,
+                backGap,
+                floorDepth
+            };
             this.truckFloorMesh = BABYLON.MeshBuilder.CreateBox('truckPhysicsFloor', {
                 width: this.cargoWidth + 0.2,  // Slightly wider than cargo for edge grip
                 height: 0.2,
