@@ -1982,101 +1982,11 @@ class Truck {
                 }
             }
             
-            // If truck is moving and item is safely inside, lock it to the truck using kinematic mode.
-            if (body && body.setMotionType) {
-                const halfX = item.size ? item.size.x / 2 : 0.3;
-                const halfZ = item.size ? item.size.z / 2 : 0.3;
-                const marginX = this.cargoWidth / 2 - halfX - 0.15;
-                const marginFront = -this.cargoLength / 2 + halfZ + 0.2;
-                const marginBack = this.cargoLength / 2 - halfZ - 0.3;
-                const isSafeInside = Math.abs(localX) < marginX && localZ > marginFront && localZ < marginBack;
-
-                if (isTruckMoving && isSafeInside) {
-                    if (!item._moveLocked) {
-                        item._moveLocked = true;
-                        item._moveLockRestore = body.getMotionType ? body.getMotionType() : BABYLON.PhysicsMotionType.DYNAMIC;
-                        body.setMotionType(BABYLON.PhysicsMotionType.KINEMATIC);
-                    }
-                    if (body.setLinearVelocity) body.setLinearVelocity(BABYLON.Vector3.Zero());
-                    if (body.setAngularVelocity) body.setAngularVelocity(BABYLON.Vector3.Zero());
-                    if (body.setTargetTransform) {
-                        const localVec = new BABYLON.Vector3(item.localX ?? localX, item.mesh.position.y, item.localZ ?? localZ);
-                        const targetPos = BABYLON.Vector3.TransformCoordinates(localVec, worldMatrix);
-                        const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
-                        body.setTargetTransform(targetPos, quat);
-                    }
-                } else if (item._moveLocked) {
-                    item._moveLocked = false;
-                    const restoreType = item._moveLockRestore ?? BABYLON.PhysicsMotionType.DYNAMIC;
-                    body.setMotionType(restoreType);
-                    if (body.setLinearVelocity) body.setLinearVelocity(BABYLON.Vector3.Zero());
-                    if (body.setAngularVelocity) body.setAngularVelocity(BABYLON.Vector3.Zero());
-                }
-            }
-
             // Update local position tracking
             if (item.mesh.physicsAggregate) {
                 item.localX = localX;
                 item.localZ = localZ;
                 item.localY = item.mesh.position.y;
-            }
-            
-            // === HARD POSITION CLAMP ===
-            // If physics fails, just FORCE the item to stay inside bounds
-            // This is a last-resort failsafe - item cannot escape no matter what
-            const halfX = item.size ? item.size.x / 2 : 0.3;
-            const halfZ = item.size ? item.size.z / 2 : 0.3;
-            const maxLocalX = Math.max(0, this.cargoWidth / 2 - halfX - 0.05);
-            const minLocalZ = Math.min(0, -this.cargoLength / 2 + halfZ + 0.05);
-            
-            let needsClamp = false;
-            let clampedLocalX = localX;
-            let clampedLocalZ = localZ;
-            
-            if (maxLocalX === 0) {
-                if (localX !== 0) {
-                    clampedLocalX = 0;
-                    needsClamp = true;
-                }
-            } else {
-                if (localX < -maxLocalX) { clampedLocalX = -maxLocalX; needsClamp = true; }
-                if (localX > maxLocalX) { clampedLocalX = maxLocalX; needsClamp = true; }
-            }
-            if (localZ < minLocalZ) { clampedLocalZ = minLocalZ; needsClamp = true; }
-            // Back is open - don't clamp positive Z
-            
-            if (needsClamp && !item.isFallen) {
-                // Clamp position using Babylon's matrix for local-to-world
-                const clampedLocal = new BABYLON.Vector3(clampedLocalX, item.mesh.position.y, clampedLocalZ);
-                const clampedWorld = BABYLON.Vector3.TransformCoordinates(clampedLocal, worldMatrix);
-                item.mesh.position.x = clampedWorld.x;
-                item.mesh.position.z = clampedWorld.z;
-                if (body) {
-                    const quat = item.mesh.rotationQuaternion || BABYLON.Quaternion.Identity();
-                    this.teleportItemBody(item, body, new BABYLON.Vector3(clampedWorld.x, item.mesh.position.y, clampedWorld.z), quat, itemsNowMs);
-                }
-
-                // Also clamp velocity toward the wall using matrices
-                if (body && body.getLinearVelocity && body.setLinearVelocity) {
-                    const vel = body.getLinearVelocity();
-                    if (vel) {
-                        // Transform velocity to local space
-                        const velLocal = BABYLON.Vector3.TransformNormal(vel, invMatrix);
-                        let newLocalVelX = velLocal.x;
-                        let newLocalVelZ = velLocal.z;
-
-                        if (localX < -maxLocalX && velLocal.x < 0) newLocalVelX = 0;
-                        if (localX > maxLocalX && velLocal.x > 0) newLocalVelX = 0;
-                        if (localZ < minLocalZ && velLocal.z < 0) newLocalVelZ = 0;
-
-                        // Transform back to world space
-                        const newLocalVel = new BABYLON.Vector3(newLocalVelX, vel.y, newLocalVelZ);
-                        const newWorldVel = BABYLON.Vector3.TransformNormal(newLocalVel, worldMatrix);
-                        body.setLinearVelocity(new BABYLON.Vector3(newWorldVel.x, vel.y, newWorldVel.z));
-                    }
-                }
-
-                console.warn(`📍 HARD CLAMP: ${item.id || item.mesh.name} from (${localX.toFixed(2)}, ${localZ.toFixed(2)}) to (${clampedLocalX.toFixed(2)}, ${clampedLocalZ.toFixed(2)})`);
             }
             
             // === AGGRESSIVE VELOCITY CAPPING ===
@@ -2553,7 +2463,7 @@ class Truck {
             }
             mesh.rotationQuaternion.copyFrom(this._physicsRotQuat);
             
-            // IMPORTANT: For Havok animated bodies, we must set the target transform
+            // IMPORTANT: For animated bodies, we must set the target transform
             // on the physics body, not just update the mesh
             this._physicsTargetPos.set(worldVec.x, worldVec.y, worldVec.z);
             aggregate.body.setTargetTransform(this._physicsTargetPos, this._physicsRotQuat);
@@ -2686,7 +2596,8 @@ class Truck {
                     this.scene
                 );
             
-                // Set as animated so it can move with the truck
+                // Use ANIMATED bodies for moving truck walls/floor so Havok
+                // treats them as driven collision geometry.
                 if (aggregate.body && aggregate.body.setMotionType) {
                     aggregate.body.setMotionType(BABYLON.PhysicsMotionType.ANIMATED);
                 }
@@ -2706,8 +2617,7 @@ class Truck {
                     aggregate.body.setCollisionFilterCollideMask(1 | 2); // Collide with items (1) and other truck parts (2)
                 }
                 
-                // Enable CCD on animated walls - this helps when truck moves fast
-                // Note: Havok's animated bodies can still benefit from CCD
+                // Enable CCD on moving walls - this helps when truck moves fast
                 if (aggregate.body) {
                     if (aggregate.body.setCcdEnabled) {
                         aggregate.body.setCcdEnabled(true);
@@ -2723,6 +2633,12 @@ class Truck {
                 
                 this.truckPhysicsAggregates.push({ mesh, aggregate });
             });
+
+            if (!this._physicsSyncObserver) {
+                this._physicsSyncObserver = this.scene.onBeforePhysicsObservable.add(() => {
+                    this.syncPhysicsBodies();
+                });
+            }
         }
     }
     
