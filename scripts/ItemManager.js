@@ -1212,19 +1212,6 @@ class ItemManager {
         const halfL = truck.cargoLength / 2;
         const floorY = truck.cargoFloorHeight + 0.05; // Slightly above cargo floor
 
-        // Store local offsets for manual position updates
-        this._debugLocalOffsets = {
-            floor: { x: 0, y: floorY, z: 0 },
-            corners: [
-                { x: -halfW, y: floorY + 0.15, z: -halfL },
-                { x:  halfW, y: floorY + 0.15, z: -halfL },
-                { x:  halfW, y: floorY + 0.15, z:  halfL },
-                { x: -halfW, y: floorY + 0.15, z:  halfL },
-            ],
-            center: { x: 0, y: floorY + 0.3, z: 0 },
-            arrow: { x: 0, y: floorY + 0.3, z: -halfL - 0.5 }
-        };
-
         // === GREEN FLOOR PLANE ===
         this.debugFloorPlane = BABYLON.MeshBuilder.CreateGround('debugFloorPlane', {
             width: truck.cargoWidth,
@@ -1238,6 +1225,8 @@ class ItemManager {
         floorMat.backFaceCulling = false;
         this.debugFloorPlane.material = floorMat;
         this.debugFloorPlane.isPickable = false;
+        this.debugFloorPlane.parent = truck.root;
+        this.debugFloorPlane.position.set(0, floorY, 0);
 
         // === YELLOW CORNER MARKERS (outer cargo bounds) ===
         this.debugCornerMarkers = [];
@@ -1250,6 +1239,14 @@ class ItemManager {
             marker.isPickable = false;
             this.debugCornerMarkers.push(marker);
         }
+        this.debugCornerMarkers[0].parent = truck.root;
+        this.debugCornerMarkers[0].position.set(-halfW, floorY + 0.15, -halfL);
+        this.debugCornerMarkers[1].parent = truck.root;
+        this.debugCornerMarkers[1].position.set(halfW, floorY + 0.15, -halfL);
+        this.debugCornerMarkers[2].parent = truck.root;
+        this.debugCornerMarkers[2].position.set(halfW, floorY + 0.15, halfL);
+        this.debugCornerMarkers[3].parent = truck.root;
+        this.debugCornerMarkers[3].position.set(-halfW, floorY + 0.15, halfL);
 
 
         // === RED CENTER MARKER ===
@@ -1258,6 +1255,8 @@ class ItemManager {
         this.debugTruckCenterMarker = BABYLON.MeshBuilder.CreateSphere('debugCenter', { diameter: 0.3 }, this.scene);
         this.debugTruckCenterMarker.material = centerMat;
         this.debugTruckCenterMarker.isPickable = false;
+        this.debugTruckCenterMarker.parent = truck.root;
+        this.debugTruckCenterMarker.position.set(0, floorY + 0.3, 0);
 
         // === BLUE FORWARD ARROW ===
         const arrowMat = new BABYLON.StandardMaterial('debugArrowMat', this.scene);
@@ -1269,80 +1268,14 @@ class ItemManager {
         }, this.scene);
         this.debugForwardArrow.material = arrowMat;
         this.debugForwardArrow.isPickable = false;
+        this.debugForwardArrow.parent = truck.root;
+        this.debugForwardArrow.position.set(0, floorY + 0.3, -halfL - 0.5);
 
-        // Add render loop observer to manually update positions every frame
-        this._debugObserver = this.scene.onBeforeRenderObservable.add(() => {
-            this._updateDebugMeshPositions();
-        });
-
-        // Initial position update
-        this._updateDebugMeshPositions();
-
-        console.log('🔍 DEBUG: Created debug meshes with manual position updates');
-    }
-
-    // Manually transform local offsets to world positions each frame
-    _updateDebugMeshPositions() {
-        const truck = this.truck;
-        if (!truck) return;
-
-        const truckX = truck.position.x;
-        const truckZ = truck.position.z;
-        const truckRot = truck.rotation;
-        const cos = Math.cos(truckRot);
-        const sin = Math.sin(truckRot);
-
-        // Helper to transform local to world
-        // Babylon.js Y rotation: local +X maps to (cos, sin), local +Z maps to (sin, cos)
-        const toWorld = (local) => {
-            return {
-                x: truckX + local.x * cos + local.z * sin,
-                y: local.y,
-                z: truckZ - local.x * sin + local.z * cos
-            };
-        };
-
-        // Update floor
-        if (this.debugFloorPlane && this._debugLocalOffsets) {
-            const pos = toWorld(this._debugLocalOffsets.floor);
-            this.debugFloorPlane.position.set(pos.x, pos.y, pos.z);
-            this.debugFloorPlane.rotation.y = truckRot;
-        }
-
-        // Update corner markers
-        if (this.debugCornerMarkers && this._debugLocalOffsets) {
-            this.debugCornerMarkers.forEach((marker, i) => {
-                const pos = toWorld(this._debugLocalOffsets.corners[i]);
-                marker.position.set(pos.x, pos.y, pos.z);
-            });
-        }
-
-        // Update center marker
-        if (this.debugTruckCenterMarker && this._debugLocalOffsets) {
-            const pos = toWorld(this._debugLocalOffsets.center);
-            this.debugTruckCenterMarker.position.set(pos.x, pos.y, pos.z);
-        }
-
-        // Update forward arrow
-        if (this.debugForwardArrow && this._debugLocalOffsets) {
-            const pos = toWorld(this._debugLocalOffsets.arrow);
-            this.debugForwardArrow.position.set(pos.x, pos.y, pos.z);
-            this.debugForwardArrow.rotation.y = truckRot;
-        }
-
+        console.log('🔍 DEBUG: Created debug meshes parented to truck root');
     }
 
     // Clean up all debug meshes
     cleanupDebugMeshes() {
-        // Remove render loop observer
-        if (this._debugObserver) {
-            this.scene.onBeforeRenderObservable.remove(this._debugObserver);
-            this._debugObserver = null;
-        }
-
-        // Clear local offsets
-        this._debugLocalOffsets = null;
-
         if (this.debugLines) {
             this.debugLines.forEach(line => line.dispose());
             this.debugLines = [];
